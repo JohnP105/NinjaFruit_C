@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -pthread
-LIBS=-lm -lSDL2
+LIBS=-lm -lSDL2 -lSDL2_image -lSDL2_mixer
 
 all: game
 

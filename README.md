@@ -1,10 +1,11 @@
 # NinjaFruit Game in C with SDL
 
-A Fruit Ninja style game built in C, using SDL for graphics. This implementation focuses on OS concepts including threading, forking, and pipes.
+A Fruit Ninja style game built in C, using SDL for graphics and audio. This implementation focuses on OS concepts including threading, forking, and pipes.
 
 ## Features
 
-- **SDL Graphics**: Colorful custom-drawn fruits (apple, banana, orange) and bombs with rotation and slicing effects
+- **SDL Graphics**: High-quality fruit and bomb images with rotation and slicing effects
+- **SDL Audio**: Background music and sound effects for slicing fruits and bombs
 - **Threading**: Spawns fruits in a separate thread to demonstrate thread synchronization
 - **Forking**: Uses a child process to manage power-ups
 - **Pipes**: Communication between parent and child processes for power-up events
@@ -21,24 +22,24 @@ A Fruit Ninja style game built in C, using SDL for graphics. This implementation
 
 ## Prerequisites
 
-You need to install SDL2 library:
+You need to install SDL2, SDL2_image, and SDL2_mixer libraries:
 
 ### On macOS (using Homebrew):
 
 ```bash
-brew install sdl2
+brew install sdl2 sdl2_image sdl2_mixer
 ```
 
 ### On Ubuntu/Debian:
 
 ```bash
-sudo apt-get install libsdl2-dev
+sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev
 ```
 
 ### On Fedora:
 
 ```bash
-sudo dnf install SDL2-devel
+sudo dnf install SDL2-devel SDL2_image-devel SDL2_mixer-devel
 ```
 
 ## Building and Running
@@ -59,12 +60,15 @@ make
 - Avoid slicing bombs (black objects with a fuse)
 - Press Escape or close the window to exit
 
-## Visuals
+## Assets
 
-- **Apple**: Red circle with a stem
-- **Banana**: Yellow curved shape
-- **Orange**: Orange circle with segments
-- **Bomb**: Black circle with a fuse and animated spark
+The game uses the following assets:
+
+- **Images**: High-quality PNG images for apples, bananas, oranges, and bombs
+- **Sounds**:
+  - Slice sound when cutting fruits
+  - Explosion sound when cutting bombs
+  - Background music
 
 ## OS Concepts Demonstrated
 
