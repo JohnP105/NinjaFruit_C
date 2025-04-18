@@ -41,7 +41,9 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev
 
 ### Game Summary
 
-NinjaFruit is a Fruit Ninja style game built in C using SDL for graphics and audio. The player slices fruits that fly across the screen while avoiding bombs. The implementation showcases OS concepts including threading, forking, and pipes to manage game elements and inter-process communication.
+NinjaFruit is a Fruit Ninja style game built in C using SDL for graphics and audio. The player slices fruits that fly across the screen while avoiding bombs. The implementation showcases OS concepts including threading, forking, and pipes to manage game elements and inter-process communication. 
+
+What sets NinjaFruit apart is its tight integration of Operating System concepts into gameplay architecture. The project serves not only as a fun game but also as a hands-on demonstration of threading, inter-process communication (IPC), forking, synchronization, signal handling, and planned deadlock detection—all implemented from the ground up in C. The game functions as both a playable experience and an educational tool for exploring low-level OS mechanics in an interactive setting.
 
 ### Core Gameplay Loop
 
