@@ -10,13 +10,12 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 
 // Game constants
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define MAX_FRUITS 20
-#define FRUIT_TYPES 4
+#define FRUIT_TYPES 3  // Apple, Banana, Orange
 #define BOMB_CHANCE 10 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
 
@@ -26,7 +25,6 @@ typedef enum
     APPLE,
     BANANA,
     ORANGE,
-    WATERMELON,
     BOMB
 } ObjectType;
 
@@ -52,9 +50,6 @@ int spawn_pipe[2]; // Pipe for communicating with spawn process
 // SDL related variables
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
-SDL_Texture *fruit_textures[FRUIT_TYPES];
-SDL_Texture *bomb_texture = NULL;
-SDL_Texture *slice_texture = NULL;
 SDL_Texture *background_texture = NULL;
 
 // Mouse tracking
@@ -72,6 +67,217 @@ void cleanupGame();
 void saveScore();
 void signalHandler(int sig);
 void processSpawner();
+void drawFruit(ObjectType type, SDL_Rect *dest, float rotation, int sliced);
+
+// Draw a specific fruit type
+void drawFruit(ObjectType type, SDL_Rect *dest, float rotation, int sliced)
+{
+    // Center of the fruit
+    int centerX = dest->x + dest->w / 2;
+    int centerY = dest->y + dest->h / 2;
+    int radius = dest->w / 2;
+
+    // Set up rotation matrix (simplified version)
+    float cosR = cos(rotation);
+    float sinR = sin(rotation);
+
+    switch (type)
+    {
+    case APPLE:
+        // Draw red apple circle
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+
+        // Draw filled circle
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                if (x * x + y * y <= radius * radius)
+                {
+                    int drawX = centerX + (int)(x * cosR - y * sinR);
+                    int drawY = centerY + (int)(x * sinR + y * cosR);
+                    SDL_RenderDrawPoint(renderer, drawX, drawY);
+                }
+            }
+        }
+
+        // Draw apple stem
+        SDL_SetRenderDrawColor(renderer, 100, 50, 0, 255);
+        SDL_RenderDrawLine(renderer,
+                           centerX + (int)(0 * cosR - (-radius - 5) * sinR),
+                           centerY + (int)(0 * sinR + (-radius - 5) * cosR),
+                           centerX + (int)(0 * cosR - (-radius - 10) * sinR),
+                           centerY + (int)(0 * sinR + (-radius - 10) * cosR));
+
+        // If sliced, draw slice line
+        if (sliced)
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderDrawLine(renderer,
+                               centerX + (int)((-radius - 5) * cosR - 0 * sinR),
+                               centerY + (int)((-radius - 5) * sinR + 0 * cosR),
+                               centerX + (int)((radius + 5) * cosR - 0 * sinR),
+                               centerY + (int)((radius + 5) * sinR + 0 * cosR));
+        }
+        break;
+
+    case BANANA:
+        // Draw yellow banana
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+
+        // Draw banana arc
+        for (int i = 0; i < 180; i++)
+        {
+            float angle = i * M_PI / 180.0;
+            float x1 = radius * 1.5 * cos(angle); // Elongated
+            float y1 = radius * sin(angle);
+
+            // Add some curvature
+            x1 -= radius * 0.5; // Shift to create curved shape
+
+            // Rotate and translate
+            int drawX = centerX + (int)(x1 * cosR - y1 * sinR);
+            int drawY = centerY + (int)(x1 * sinR + y1 * cosR);
+
+            // Draw a thick point
+            for (int j = -2; j <= 2; j++)
+            {
+                for (int k = -2; k <= 2; k++)
+                {
+                    if (j * j + k * k <= 4)
+                    {
+                        SDL_RenderDrawPoint(renderer, drawX + j, drawY + k);
+                    }
+                }
+            }
+        }
+
+        // If sliced, draw slice line
+        if (sliced)
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderDrawLine(renderer,
+                               centerX + (int)((-radius - 5) * cosR - 0 * sinR),
+                               centerY + (int)((-radius - 5) * sinR + 0 * cosR),
+                               centerX + (int)((radius + 5) * cosR - 0 * sinR),
+                               centerY + (int)((radius + 5) * sinR + 0 * cosR));
+        }
+        break;
+
+    case ORANGE:
+        // Draw orange circle
+        SDL_SetRenderDrawColor(renderer, 255, 165, 0, 255);
+
+        // Draw filled circle
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                if (x * x + y * y <= radius * radius)
+                {
+                    int drawX = centerX + (int)(x * cosR - y * sinR);
+                    int drawY = centerY + (int)(x * sinR + y * cosR);
+                    SDL_RenderDrawPoint(renderer, drawX, drawY);
+                }
+            }
+        }
+
+        // Add orange texture with lines
+        SDL_SetRenderDrawColor(renderer, 225, 145, 0, 255);
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * M_PI / 4.0;
+            float x1 = 0;
+            float y1 = 0;
+            float x2 = radius * cos(angle);
+            float y2 = radius * sin(angle);
+
+            // Rotate and translate
+            int startX = centerX + (int)(x1 * cosR - y1 * sinR);
+            int startY = centerY + (int)(x1 * sinR + y1 * cosR);
+            int endX = centerX + (int)(x2 * cosR - y2 * sinR);
+            int endY = centerY + (int)(x2 * sinR + y2 * cosR);
+
+            SDL_RenderDrawLine(renderer, startX, startY, endX, endY);
+        }
+
+        // If sliced, draw slice line
+        if (sliced)
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_RenderDrawLine(renderer,
+                               centerX + (int)((-radius - 5) * cosR - 0 * sinR),
+                               centerY + (int)((-radius - 5) * sinR + 0 * cosR),
+                               centerX + (int)((radius + 5) * cosR - 0 * sinR),
+                               centerY + (int)((radius + 5) * sinR + 0 * cosR));
+        }
+        break;
+
+    case BOMB:
+        // Draw black bomb
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+
+        // Draw filled circle
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                if (x * x + y * y <= radius * radius)
+                {
+                    int drawX = centerX + (int)(x * cosR - y * sinR);
+                    int drawY = centerY + (int)(x * sinR + y * cosR);
+                    SDL_RenderDrawPoint(renderer, drawX, drawY);
+                }
+            }
+        }
+
+        // Draw bomb fuse
+        SDL_SetRenderDrawColor(renderer, 150, 75, 0, 255);
+        SDL_RenderDrawLine(renderer,
+                           centerX + (int)(0 * cosR - (-radius) * sinR),
+                           centerY + (int)(0 * sinR + (-radius) * cosR),
+                           centerX + (int)((-radius / 2) * cosR - (-radius - 10) * sinR),
+                           centerY + (int)((-radius / 2) * sinR + (-radius - 10) * cosR));
+
+        // Draw bomb spark
+        if ((SDL_GetTicks() / 100) % 2 == 0)
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+            int sparkX = centerX + (int)((-radius / 2) * cosR - (-radius - 10) * sinR);
+            int sparkY = centerY + (int)((-radius / 2) * sinR + (-radius - 10) * cosR);
+
+            for (int i = 0; i < 5; i++)
+            {
+                float angle = (float)i * 2 * M_PI / 5.0;
+                SDL_RenderDrawLine(renderer,
+                                   sparkX, sparkY,
+                                   sparkX + (int)(6 * cos(angle)),
+                                   sparkY + (int)(6 * sin(angle)));
+            }
+        }
+
+        // If sliced (game over!)
+        if (sliced)
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderDrawLine(renderer,
+                               centerX + (int)((-radius - 10) * cosR - (-radius - 10) * sinR),
+                               centerY + (int)((-radius - 10) * sinR + (-radius - 10) * cosR),
+                               centerX + (int)((radius + 10) * cosR - (radius + 10) * sinR),
+                               centerY + (int)((radius + 10) * sinR + (radius + 10) * cosR));
+
+            SDL_RenderDrawLine(renderer,
+                               centerX + (int)((-radius - 10) * cosR - (radius + 10) * sinR),
+                               centerY + (int)((-radius - 10) * sinR + (radius + 10) * cosR),
+                               centerX + (int)((radius + 10) * cosR - (-radius - 10) * sinR),
+                               centerY + (int)((radius + 10) * sinR + (-radius - 10) * cosR));
+        }
+        break;
+
+    default:
+        break;
+    }
+}
 
 // Initialize SDL and game resources
 void initGame()
@@ -83,21 +289,12 @@ void initGame()
         exit(EXIT_FAILURE);
     }
 
-    // Initialize SDL_image
-    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
-    {
-        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-        SDL_Quit();
-        exit(EXIT_FAILURE);
-    }
-
     // Create window
     window = SDL_CreateWindow("NinjaFruit Game", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
     if (window == NULL)
     {
         printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-        IMG_Quit();
         SDL_Quit();
         exit(EXIT_FAILURE);
     }
@@ -108,59 +305,50 @@ void initGame()
     {
         printf("Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
-        IMG_Quit();
         SDL_Quit();
         exit(EXIT_FAILURE);
     }
 
-    // Load textures
-    // Note: In a real implementation, you would need actual image files for these
-    // For this example, we'll create colored rectangles as placeholders
+    // Create background
+    SDL_Surface *bg_surface = SDL_CreateRGBSurface(0, WINDOW_WIDTH, WINDOW_HEIGHT, 32, 0, 0, 0, 0);
 
-    // Create fruit textures (colored rectangles)
-    SDL_Surface *fruit_surface;
+    // Create a gradient background (dark blue to light blue)
+    Uint32 *pixels = (Uint32 *)bg_surface->pixels;
+    for (int y = 0; y < WINDOW_HEIGHT; y++)
+    {
+        // Calculate gradient color (dark blue at bottom, light blue at top)
+        Uint8 blue = 50 + (150 * y / WINDOW_HEIGHT);
+        Uint8 green = 10 + (70 * y / WINDOW_HEIGHT);
+        Uint32 color = SDL_MapRGB(bg_surface->format, 10, green, blue);
 
-    // Apple (red)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 0, 0));
-    fruit_textures[APPLE] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
+        for (int x = 0; x < WINDOW_WIDTH; x++)
+        {
+            pixels[y * bg_surface->pitch / 4 + x] = color;
+        }
+    }
 
-    // Banana (yellow)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 255, 0));
-    fruit_textures[BANANA] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
+    // Add some stars
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    for (int i = 0; i < 100; i++)
+    {
+        int x = rand() % WINDOW_WIDTH;
+        int y = rand() % WINDOW_HEIGHT;
+        int size = 1 + rand() % 3;
 
-    // Orange (orange)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 165, 0));
-    fruit_textures[ORANGE] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
+        for (int sy = -size / 2; sy <= size / 2; sy++)
+        {
+            for (int sx = -size / 2; sx <= size / 2; sx++)
+            {
+                if (x + sx >= 0 && x + sx < WINDOW_WIDTH && y + sy >= 0 && y + sy < WINDOW_HEIGHT)
+                {
+                    pixels[(y + sy) * bg_surface->pitch / 4 + (x + sx)] = SDL_MapRGB(bg_surface->format, 255, 255, 255);
+                }
+            }
+        }
+    }
 
-    // Watermelon (green)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 255, 0));
-    fruit_textures[WATERMELON] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
-
-    // Bomb (black)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 0, 0));
-    bomb_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
-
-    // Slice effect (white)
-    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE / 2, FRUIT_SIZE / 2, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 255, 255));
-    slice_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
-
-    // Background (dark blue)
-    fruit_surface = SDL_CreateRGBSurface(0, WINDOW_WIDTH, WINDOW_HEIGHT, 32, 0, 0, 0, 0);
-    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 0, 50));
-    background_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
-    SDL_FreeSurface(fruit_surface);
+    background_texture = SDL_CreateTextureFromSurface(renderer, bg_surface);
+    SDL_FreeSurface(bg_surface);
 
     // Initialize mutex
     pthread_mutex_init(&game_mutex, NULL);
@@ -208,10 +396,10 @@ void *spawnObjects(void *arg)
                     gameObjects[i].active = 1;
                     gameObjects[i].x = rand() % (WINDOW_WIDTH - FRUIT_SIZE);
                     gameObjects[i].y = WINDOW_HEIGHT;
-                    gameObjects[i].velocity = -5.0f - (rand() % 5); // Negative to go upward
+                    gameObjects[i].velocity = -10.0f - (rand() % 8); // Negative to go upward
                     gameObjects[i].sliced = 0;
                     gameObjects[i].rotation = 0.0f;
-                    gameObjects[i].rotSpeed = 0.1f + ((float)rand() / RAND_MAX) * 0.2f;
+                    gameObjects[i].rotSpeed = 0.05f + ((float)rand() / RAND_MAX) * 0.1f;
                     if (rand() % 2)
                         gameObjects[i].rotSpeed *= -1; // Random direction
 
@@ -306,6 +494,13 @@ void handleEvents()
         {
             mouse_down = 0;
         }
+        else if (e.type == SDL_KEYDOWN)
+        {
+            if (e.key.keysym.sym == SDLK_ESCAPE)
+            {
+                running = 0;
+            }
+        }
     }
 }
 
@@ -350,11 +545,36 @@ void renderGame()
     // Draw background
     SDL_RenderCopy(renderer, background_texture, NULL, NULL);
 
+    // Draw score
+    char score_text[32];
+    sprintf(score_text, "Score: %d", score);
+
+    // Draw score as plain text using primitives
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_Rect score_bg = {10, 10, 120, 30};
+    SDL_RenderFillRect(renderer, &score_bg);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_Rect score_outline = {10, 10, 120, 30};
+    SDL_RenderDrawRect(renderer, &score_outline);
+
+    // We don't have SDL_ttf, so we'll show the score in console
+
     // Draw mouse trail if mouse is down
     if (mouse_down)
     {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDrawLine(renderer, prev_mouse_x, prev_mouse_y, mouse_x, mouse_y);
+
+        // Draw a thicker line for better visibility
+        for (int i = -1; i <= 1; i++)
+        {
+            for (int j = -1; j <= 1; j++)
+            {
+                SDL_RenderDrawLine(renderer,
+                                   prev_mouse_x + i, prev_mouse_y + j,
+                                   mouse_x + i, mouse_y + j);
+            }
+        }
     }
 
     // Draw game objects
@@ -363,43 +583,17 @@ void renderGame()
     {
         if (gameObjects[i].active)
         {
-            SDL_Texture *texture;
-            if (gameObjects[i].type == BOMB)
-            {
-                texture = bomb_texture;
-            }
-            else
-            {
-                texture = fruit_textures[gameObjects[i].type];
-            }
-
             SDL_Rect dest = {
                 (int)gameObjects[i].x,
                 (int)gameObjects[i].y,
                 FRUIT_SIZE,
                 FRUIT_SIZE};
 
-            // Draw with rotation
-            SDL_RenderCopyEx(renderer, texture, NULL, &dest,
-                             gameObjects[i].rotation * 57.2958f, NULL, SDL_FLIP_NONE);
-
-            // Draw slice effect if sliced
-            if (gameObjects[i].sliced)
-            {
-                SDL_Rect slice_dest = {
-                    (int)gameObjects[i].x + FRUIT_SIZE / 4,
-                    (int)gameObjects[i].y + FRUIT_SIZE / 4,
-                    FRUIT_SIZE / 2,
-                    FRUIT_SIZE / 2};
-                SDL_RenderCopy(renderer, slice_texture, NULL, &slice_dest);
-            }
+            // Draw the fruit using our custom function
+            drawFruit(gameObjects[i].type, &dest, gameObjects[i].rotation, gameObjects[i].sliced);
         }
     }
     pthread_mutex_unlock(&game_mutex);
-
-    // Draw score
-    // In a real implementation, you would use SDL_ttf to render text
-    // For this example, we'll just print the score to the console
 
     // Update screen
     SDL_RenderPresent(renderer);
@@ -408,13 +602,7 @@ void renderGame()
 // Clean up SDL resources
 void cleanupGame()
 {
-    // Clean up textures
-    for (int i = 0; i < FRUIT_TYPES; i++)
-    {
-        SDL_DestroyTexture(fruit_textures[i]);
-    }
-    SDL_DestroyTexture(bomb_texture);
-    SDL_DestroyTexture(slice_texture);
+    // Clean up texture
     SDL_DestroyTexture(background_texture);
 
     // Clean up renderer and window
@@ -422,7 +610,6 @@ void cleanupGame()
     SDL_DestroyWindow(window);
 
     // Quit SDL subsystems
-    IMG_Quit();
     SDL_Quit();
 
     // Clean up mutex

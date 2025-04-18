@@ -4,7 +4,7 @@ A Fruit Ninja style game built in C, using SDL for graphics. This implementation
 
 ## Features
 
-- **SDL Graphics**: Colorful fruit and bomb objects with rotation and slicing effects
+- **SDL Graphics**: Colorful custom-drawn fruits (apple, banana, orange) and bombs with rotation and slicing effects
 - **Threading**: Spawns fruits in a separate thread to demonstrate thread synchronization
 - **Forking**: Uses a child process to manage power-ups
 - **Pipes**: Communication between parent and child processes for power-up events
@@ -21,24 +21,24 @@ A Fruit Ninja style game built in C, using SDL for graphics. This implementation
 
 ## Prerequisites
 
-You need to install SDL2 and SDL2_image libraries:
+You need to install SDL2 library:
 
 ### On macOS (using Homebrew):
 
 ```bash
-brew install sdl2 sdl2_image
+brew install sdl2
 ```
 
 ### On Ubuntu/Debian:
 
 ```bash
-sudo apt-get install libsdl2-dev libsdl2-image-dev
+sudo apt-get install libsdl2-dev
 ```
 
 ### On Fedora:
 
 ```bash
-sudo dnf install SDL2-devel SDL2_image-devel
+sudo dnf install SDL2-devel
 ```
 
 ## Building and Running
@@ -50,14 +50,21 @@ make
 # Run the game
 ./ninja_fruit
 
-# To exit the game, close the window or press Ctrl+C
+# To exit the game, close the window, press Escape, or press Ctrl+C
 ```
 
 ## Controls
 
 - Drag the mouse to slice fruits
-- Avoid slicing bombs (black objects)
-- Close the window or press Ctrl+C to exit
+- Avoid slicing bombs (black objects with a fuse)
+- Press Escape or close the window to exit
+
+## Visuals
+
+- **Apple**: Red circle with a stem
+- **Banana**: Yellow curved shape
+- **Orange**: Orange circle with segments
+- **Bomb**: Black circle with a fuse and animated spark
 
 ## OS Concepts Demonstrated
 
