@@ -119,3 +119,4 @@ The game uses the following assets:
 - Enhance visual effects for slicing
 - Add more advanced game mechanics with deadlock detection for resource management
 - Implement additional OS concepts like semaphores and shared memory
+- Improve mouse spicing feature so user can slice in every angle
