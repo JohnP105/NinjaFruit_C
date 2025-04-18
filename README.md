@@ -120,3 +120,7 @@ The game uses the following assets:
 - Add more advanced game mechanics with deadlock detection for resource management
 - Implement additional OS concepts like semaphores and shared memory
 - Improve mouse spicing feature so user can slice in every angle
+
+### NinjaFruit Gameplay
+<img width="1141" alt="Screen Shot 2025-04-18 at 3 54 28 PM" src="https://github.com/user-attachments/assets/08122fe6-7e99-485d-8680-b682db3727fe" />
+
