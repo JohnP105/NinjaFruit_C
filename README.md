@@ -1,9 +1,10 @@
-# NinjaFruit Game in C
+# NinjaFruit Game in C with SDL
 
-A text-based implementation of a Fruit Ninja style game built in C, focusing on OS concepts including threading, forking, and pipes.
+A Fruit Ninja style game built in C, using SDL for graphics. This implementation focuses on OS concepts including threading, forking, and pipes.
 
 ## Features
 
+- **SDL Graphics**: Colorful fruit and bomb objects with rotation and slicing effects
 - **Threading**: Spawns fruits in a separate thread to demonstrate thread synchronization
 - **Forking**: Uses a child process to manage power-ups
 - **Pipes**: Communication between parent and child processes for power-up events
@@ -12,11 +13,33 @@ A text-based implementation of a Fruit Ninja style game built in C, focusing on 
 
 ## Game Mechanics
 
-- Fruits and bombs fall from the top of the screen
-- Player slices fruits by dragging the mouse (simulated in this text-based version)
+- Fruits and bombs are thrown from the bottom of the screen
+- Player slices fruits by dragging the mouse
 - Slicing fruits increases score, slicing bombs decreases score
 - Missing fruits decreases score
 - Power-ups are occasionally spawned by the child process
+
+## Prerequisites
+
+You need to install SDL2 and SDL2_image libraries:
+
+### On macOS (using Homebrew):
+
+```bash
+brew install sdl2 sdl2_image
+```
+
+### On Ubuntu/Debian:
+
+```bash
+sudo apt-get install libsdl2-dev libsdl2-image-dev
+```
+
+### On Fedora:
+
+```bash
+sudo dnf install SDL2-devel SDL2_image-devel
+```
 
 ## Building and Running
 
@@ -27,8 +50,14 @@ make
 # Run the game
 ./ninja_fruit
 
-# To exit the game, press Ctrl+C (sends SIGINT)
+# To exit the game, close the window or press Ctrl+C
 ```
+
+## Controls
+
+- Drag the mouse to slice fruits
+- Avoid slicing bombs (black objects)
+- Close the window or press Ctrl+C to exit
 
 ## OS Concepts Demonstrated
 
@@ -53,6 +82,5 @@ make
 
 ## Future Improvements
 
-- Add graphical interface using SDL or other graphics library
-- Implement more advanced game mechanics
+- Add more advanced game mechanics
 - Add more OS concepts like semaphores and shared memory

@@ -9,13 +9,16 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 
 // Game constants
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 #define MAX_FRUITS 20
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
 #define FRUIT_TYPES 4
 #define BOMB_CHANCE 10 // 1 in 10 chance of spawning a bomb
+#define FRUIT_SIZE 64
 
 // Game data structures
 typedef enum
@@ -29,12 +32,14 @@ typedef enum
 
 typedef struct
 {
-    int x;           // x position
-    int y;           // y position
-    int velocity;    // speed
+    float x;         // x position
+    float y;         // y position
+    float velocity;  // speed
     int active;      // whether the fruit is active
     ObjectType type; // type of object
     int sliced;      // whether the fruit has been sliced
+    float rotation;  // rotation angle
+    float rotSpeed;  // rotation speed
 } GameObject;
 
 // Global variables
@@ -44,18 +49,119 @@ int score = 0;
 int running = 1;
 int spawn_pipe[2]; // Pipe for communicating with spawn process
 
+// SDL related variables
+SDL_Window *window = NULL;
+SDL_Renderer *renderer = NULL;
+SDL_Texture *fruit_textures[FRUIT_TYPES];
+SDL_Texture *bomb_texture = NULL;
+SDL_Texture *slice_texture = NULL;
+SDL_Texture *background_texture = NULL;
+
+// Mouse tracking
+int mouse_x = 0, mouse_y = 0;
+int prev_mouse_x = 0, prev_mouse_y = 0;
+int mouse_down = 0;
+
 // Function prototypes
 void initGame();
 void *spawnObjects(void *arg);
-void handleSlice(int x, int y);
+void handleEvents();
 void updateGame();
+void renderGame();
+void cleanupGame();
 void saveScore();
 void signalHandler(int sig);
 void processSpawner();
 
-// Initialize the game
+// Initialize SDL and game resources
 void initGame()
 {
+    // Initialize SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    {
+        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+        exit(EXIT_FAILURE);
+    }
+
+    // Initialize SDL_image
+    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
+    {
+        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        SDL_Quit();
+        exit(EXIT_FAILURE);
+    }
+
+    // Create window
+    window = SDL_CreateWindow("NinjaFruit Game", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                              WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
+    if (window == NULL)
+    {
+        printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
+        IMG_Quit();
+        SDL_Quit();
+        exit(EXIT_FAILURE);
+    }
+
+    // Create renderer
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (renderer == NULL)
+    {
+        printf("Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        IMG_Quit();
+        SDL_Quit();
+        exit(EXIT_FAILURE);
+    }
+
+    // Load textures
+    // Note: In a real implementation, you would need actual image files for these
+    // For this example, we'll create colored rectangles as placeholders
+
+    // Create fruit textures (colored rectangles)
+    SDL_Surface *fruit_surface;
+
+    // Apple (red)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 0, 0));
+    fruit_textures[APPLE] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Banana (yellow)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 255, 0));
+    fruit_textures[BANANA] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Orange (orange)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 165, 0));
+    fruit_textures[ORANGE] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Watermelon (green)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 255, 0));
+    fruit_textures[WATERMELON] = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Bomb (black)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE, FRUIT_SIZE, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 0, 0));
+    bomb_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Slice effect (white)
+    fruit_surface = SDL_CreateRGBSurface(0, FRUIT_SIZE / 2, FRUIT_SIZE / 2, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 255, 255, 255));
+    slice_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
+    // Background (dark blue)
+    fruit_surface = SDL_CreateRGBSurface(0, WINDOW_WIDTH, WINDOW_HEIGHT, 32, 0, 0, 0, 0);
+    SDL_FillRect(fruit_surface, NULL, SDL_MapRGB(fruit_surface->format, 0, 0, 50));
+    background_texture = SDL_CreateTextureFromSurface(renderer, fruit_surface);
+    SDL_FreeSurface(fruit_surface);
+
     // Initialize mutex
     pthread_mutex_init(&game_mutex, NULL);
 
@@ -75,6 +181,7 @@ void initGame()
     if (pipe(spawn_pipe) == -1)
     {
         perror("Pipe creation failed");
+        cleanupGame();
         exit(EXIT_FAILURE);
     }
 }
@@ -99,10 +206,14 @@ void *spawnObjects(void *arg)
                 if (rand() % 30 == 0)
                 {
                     gameObjects[i].active = 1;
-                    gameObjects[i].x = rand() % SCREEN_WIDTH;
-                    gameObjects[i].y = 0;
-                    gameObjects[i].velocity = 2 + rand() % 5;
+                    gameObjects[i].x = rand() % (WINDOW_WIDTH - FRUIT_SIZE);
+                    gameObjects[i].y = WINDOW_HEIGHT;
+                    gameObjects[i].velocity = -5.0f - (rand() % 5); // Negative to go upward
                     gameObjects[i].sliced = 0;
+                    gameObjects[i].rotation = 0.0f;
+                    gameObjects[i].rotSpeed = 0.1f + ((float)rand() / RAND_MAX) * 0.2f;
+                    if (rand() % 2)
+                        gameObjects[i].rotSpeed *= -1; // Random direction
 
                     // Determine if it's a bomb or fruit
                     if (rand() % BOMB_CHANCE == 0)
@@ -123,45 +234,79 @@ void *spawnObjects(void *arg)
         pthread_mutex_unlock(&game_mutex);
 
         // Sleep to control spawn rate
-        usleep(100000); // 100ms
+        usleep(50000); // 50ms
     }
 
     return NULL;
 }
 
-// Handle player slicing motion
-void handleSlice(int x, int y)
+// Handle SDL events
+void handleEvents()
 {
-    pthread_mutex_lock(&game_mutex);
-
-    for (int i = 0; i < MAX_FRUITS; i++)
+    SDL_Event e;
+    while (SDL_PollEvent(&e))
     {
-        if (gameObjects[i].active && !gameObjects[i].sliced)
+        if (e.type == SDL_QUIT)
         {
-            // Simple collision detection
-            int dx = x - gameObjects[i].x;
-            int dy = y - gameObjects[i].y;
-            int distance = dx * dx + dy * dy;
+            running = 0;
+        }
+        else if (e.type == SDL_MOUSEMOTION)
+        {
+            prev_mouse_x = mouse_x;
+            prev_mouse_y = mouse_y;
+            mouse_x = e.motion.x;
+            mouse_y = e.motion.y;
 
-            if (distance < 900)
-            { // 30px radius squared
-                gameObjects[i].sliced = 1;
+            // Check for slice if mouse is down
+            if (mouse_down)
+            {
+                // Check slice along the path from prev to current
+                for (int t = 0; t < 10; t++)
+                {
+                    float lerp = t / 10.0f;
+                    int slice_x = prev_mouse_x + (mouse_x - prev_mouse_x) * lerp;
+                    int slice_y = prev_mouse_y + (mouse_y - prev_mouse_y) * lerp;
 
-                if (gameObjects[i].type == BOMB)
-                {
-                    score -= 10;
-                    printf("Bomb sliced! Score: %d\n", score);
-                }
-                else
-                {
-                    score += 1;
-                    printf("Fruit sliced! Score: %d\n", score);
+                    pthread_mutex_lock(&game_mutex);
+                    for (int i = 0; i < MAX_FRUITS; i++)
+                    {
+                        if (gameObjects[i].active && !gameObjects[i].sliced)
+                        {
+                            // Simple collision detection
+                            float dx = slice_x - gameObjects[i].x - FRUIT_SIZE / 2;
+                            float dy = slice_y - gameObjects[i].y - FRUIT_SIZE / 2;
+                            float distance_squared = dx * dx + dy * dy;
+
+                            if (distance_squared < (FRUIT_SIZE / 2) * (FRUIT_SIZE / 2))
+                            {
+                                gameObjects[i].sliced = 1;
+
+                                if (gameObjects[i].type == BOMB)
+                                {
+                                    score -= 10;
+                                    printf("Bomb sliced! Score: %d\n", score);
+                                }
+                                else
+                                {
+                                    score += 1;
+                                    printf("Fruit sliced! Score: %d\n", score);
+                                }
+                            }
+                        }
+                    }
+                    pthread_mutex_unlock(&game_mutex);
                 }
             }
         }
+        else if (e.type == SDL_MOUSEBUTTONDOWN)
+        {
+            mouse_down = 1;
+        }
+        else if (e.type == SDL_MOUSEBUTTONUP)
+        {
+            mouse_down = 0;
+        }
     }
-
-    pthread_mutex_unlock(&game_mutex);
 }
 
 // Update game state
@@ -173,11 +318,13 @@ void updateGame()
     {
         if (gameObjects[i].active)
         {
-            // Update position
+            // Update position - simulate a parabolic trajectory
+            gameObjects[i].velocity += 0.2f; // Gravity effect
             gameObjects[i].y += gameObjects[i].velocity;
+            gameObjects[i].rotation += gameObjects[i].rotSpeed;
 
             // Check if out of bounds
-            if (gameObjects[i].y > SCREEN_HEIGHT)
+            if (gameObjects[i].y > WINDOW_HEIGHT + FRUIT_SIZE)
             {
                 gameObjects[i].active = 0;
 
@@ -192,6 +339,98 @@ void updateGame()
     }
 
     pthread_mutex_unlock(&game_mutex);
+}
+
+// Render the game
+void renderGame()
+{
+    // Clear screen
+    SDL_RenderClear(renderer);
+
+    // Draw background
+    SDL_RenderCopy(renderer, background_texture, NULL, NULL);
+
+    // Draw mouse trail if mouse is down
+    if (mouse_down)
+    {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawLine(renderer, prev_mouse_x, prev_mouse_y, mouse_x, mouse_y);
+    }
+
+    // Draw game objects
+    pthread_mutex_lock(&game_mutex);
+    for (int i = 0; i < MAX_FRUITS; i++)
+    {
+        if (gameObjects[i].active)
+        {
+            SDL_Texture *texture;
+            if (gameObjects[i].type == BOMB)
+            {
+                texture = bomb_texture;
+            }
+            else
+            {
+                texture = fruit_textures[gameObjects[i].type];
+            }
+
+            SDL_Rect dest = {
+                (int)gameObjects[i].x,
+                (int)gameObjects[i].y,
+                FRUIT_SIZE,
+                FRUIT_SIZE};
+
+            // Draw with rotation
+            SDL_RenderCopyEx(renderer, texture, NULL, &dest,
+                             gameObjects[i].rotation * 57.2958f, NULL, SDL_FLIP_NONE);
+
+            // Draw slice effect if sliced
+            if (gameObjects[i].sliced)
+            {
+                SDL_Rect slice_dest = {
+                    (int)gameObjects[i].x + FRUIT_SIZE / 4,
+                    (int)gameObjects[i].y + FRUIT_SIZE / 4,
+                    FRUIT_SIZE / 2,
+                    FRUIT_SIZE / 2};
+                SDL_RenderCopy(renderer, slice_texture, NULL, &slice_dest);
+            }
+        }
+    }
+    pthread_mutex_unlock(&game_mutex);
+
+    // Draw score
+    // In a real implementation, you would use SDL_ttf to render text
+    // For this example, we'll just print the score to the console
+
+    // Update screen
+    SDL_RenderPresent(renderer);
+}
+
+// Clean up SDL resources
+void cleanupGame()
+{
+    // Clean up textures
+    for (int i = 0; i < FRUIT_TYPES; i++)
+    {
+        SDL_DestroyTexture(fruit_textures[i]);
+    }
+    SDL_DestroyTexture(bomb_texture);
+    SDL_DestroyTexture(slice_texture);
+    SDL_DestroyTexture(background_texture);
+
+    // Clean up renderer and window
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+
+    // Quit SDL subsystems
+    IMG_Quit();
+    SDL_Quit();
+
+    // Clean up mutex
+    pthread_mutex_destroy(&game_mutex);
+
+    // Close pipes
+    close(spawn_pipe[0]);
+    close(spawn_pipe[1]);
 }
 
 // Save high score to file
@@ -219,14 +458,7 @@ void signalHandler(int sig)
     printf("\nGame ending. Final score: %d\n", score);
     running = 0;
     saveScore();
-
-    // Clean up mutex
-    pthread_mutex_destroy(&game_mutex);
-
-    // Close pipes
-    close(spawn_pipe[0]);
-    close(spawn_pipe[1]);
-
+    cleanupGame();
     exit(0);
 }
 
@@ -279,14 +511,6 @@ void processSpawner()
     }
 }
 
-// Simulate player input (for this text-based demo)
-void simulatePlayerInput()
-{
-    int x = rand() % SCREEN_WIDTH;
-    int y = rand() % SCREEN_HEIGHT;
-    handleSlice(x, y);
-}
-
 // Check for power-ups from child process
 void checkPowerUps()
 {
@@ -330,34 +554,24 @@ int main()
     // Main game loop
     while (running)
     {
+        // Handle SDL events
+        handleEvents();
+
         // Update game state
         updateGame();
-
-        // Simulate player input
-        if (rand() % 5 == 0)
-        {
-            simulatePlayerInput();
-        }
 
         // Check for power-ups from child process
         checkPowerUps();
 
-        // Render game (text-based for this demo)
-        int activeCount = 0;
-        pthread_mutex_lock(&game_mutex);
-        for (int i = 0; i < MAX_FRUITS; i++)
-        {
-            if (gameObjects[i].active)
-            {
-                activeCount++;
-            }
-        }
-        pthread_mutex_unlock(&game_mutex);
+        // Render game
+        renderGame();
 
-        printf("Active objects: %d, Score: %d\n", activeCount, score);
-
-        usleep(200000); // 200ms
+        // Cap to ~60 FPS
+        SDL_Delay(16);
     }
+
+    // Cleanup resources
+    cleanupGame();
 
     // Wait for spawner thread to finish
     pthread_join(spawnerThread, NULL);
