@@ -2,7 +2,10 @@
 
 ## Demo Video
 
-_(Coming soon!)_
+```bash
+# Progress Update
+April 18: https://www.youtube.com/watch?v=A7UfwjHtHrE
+```
 
 ## Setup
 
