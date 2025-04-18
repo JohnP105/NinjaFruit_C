@@ -718,8 +718,8 @@ void handleEvents()
             mouse_x = e.motion.x;
             mouse_y = e.motion.y;
 
-            // Check for slice if mouse is down
-            if (mouse_down)
+            // Check for slice based on mouse movement (no click required)
+            if (abs(mouse_x - prev_mouse_x) > 3 || abs(mouse_y - prev_mouse_y) > 3)
             {
                 // Check slice along the path from prev to current
                 for (int t = 0; t < 10; t++)
@@ -781,15 +781,15 @@ void handleEvents()
                     }
                     pthread_mutex_unlock(&game_mutex);
                 }
+
+                // Set mouse_down to true for rendering the slice trail
+                mouse_down = 1;
             }
-        }
-        else if (e.type == SDL_MOUSEBUTTONDOWN)
-        {
-            mouse_down = 1;
-        }
-        else if (e.type == SDL_MOUSEBUTTONUP)
-        {
-            mouse_down = 0;
+            else
+            {
+                // If mouse barely moved, don't show the slice trail
+                mouse_down = 0;
+            }
         }
         else if (e.type == SDL_KEYDOWN)
         {
