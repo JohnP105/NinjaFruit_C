@@ -100,19 +100,17 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
 {
     const int halfSize = FRUIT_SIZE / 2;
 
-    // Set up transformation (translate to center and rotate)
-    SDL_Point center = {halfSize, halfSize};
-    SDL_Rect dest = {x - halfSize, y - halfSize, FRUIT_SIZE, FRUIT_SIZE};
-
     // Different colors and shapes for different fruits
     switch (type)
     {
     case APPLE:
         if (!sliced)
         {
-            // Red apple
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 0, 0, 255);
+            // Red apple with gradient
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 220, 0, 0, 255);
+            filledCircleRGBA(renderer, x, y, halfSize - 8, 255, 30, 30, 255);
+            // Highlight
+            filledCircleRGBA(renderer, x - halfSize / 3, y - halfSize / 3, halfSize / 4, 255, 100, 100, 200);
 
             // Stem
             SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
@@ -120,61 +118,167 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
             SDL_RenderFillRect(renderer, &stem);
 
             // Leaf
-            SDL_SetRenderDrawColor(renderer, 0, 128, 0, 255);
-            SDL_Point leaf[3] = {
-                {x + 8, y - halfSize + 8},
+            SDL_SetRenderDrawColor(renderer, 0, 150, 0, 255);
+            SDL_Point leaf[4] = {
+                {x + 6, y - halfSize + 8},
                 {x + 18, y - halfSize + 2},
-                {x + 6, y - halfSize + 2}};
-            SDL_RenderDrawLines(renderer, leaf, 3);
-            SDL_RenderFillRect(renderer, &stem);
+                {x + 15, y - halfSize + 6},
+                {x + 6, y - halfSize + 12}};
+            int numPoints = 4;
+            SDL_RenderDrawLines(renderer, leaf, numPoints);
+
+            // Fill leaf with gradient
+            for (int i = 0; i < 5; i++)
+            {
+                SDL_SetRenderDrawColor(renderer, 0, 150 - i * 10, 0, 255);
+                SDL_Point leafFill[] = {
+                    {x + 6, y - halfSize + 8 + i},
+                    {x + 15 - i, y - halfSize + 5},
+                    {x + 10, y - halfSize + 10}};
+                SDL_RenderDrawLines(renderer, leafFill, 3);
+            }
         }
         else
         {
-            // Sliced apple - two halves
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 0, 0, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 0, 0, 255);
+            // Sliced apple - two halves with more detail
+            // Left half
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 220, 0, 0, 255);
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 13, 240, 20, 20, 255);
 
-            // White inside
+            // Right half
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 220, 0, 0, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 13, 240, 20, 20, 255);
+
+            // White inside with seeds and flesh details
             filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 240, 240, 255);
             filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 240, 240, 255);
+
+            // Seeds
+            SDL_SetRenderDrawColor(renderer, 80, 40, 0, 255);
+            for (int i = 0; i < 5; i++)
+            {
+                float angle = M_PI * i / 5.0;
+                SDL_Rect seed1 = {
+                    x - 15 + cos(angle) * (halfSize - 25) - 1,
+                    y + sin(angle) * (halfSize - 25) - 2,
+                    3, 4};
+                SDL_Rect seed2 = {
+                    x + 15 + cos(angle) * (halfSize - 25) - 1,
+                    y + sin(angle) * (halfSize - 25) - 2,
+                    3, 4};
+                SDL_RenderFillRect(renderer, &seed1);
+                SDL_RenderFillRect(renderer, &seed2);
+            }
+
+            // Flesh details
+            SDL_SetRenderDrawColor(renderer, 230, 210, 210, 255);
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = 2 * M_PI * i / 8.0;
+                SDL_RenderDrawLine(renderer,
+                                   x - 15, y,
+                                   x - 15 + cos(angle) * (halfSize - 17),
+                                   y + sin(angle) * (halfSize - 17));
+                SDL_RenderDrawLine(renderer,
+                                   x + 15, y,
+                                   x + 15 + cos(angle) * (halfSize - 17),
+                                   y + sin(angle) * (halfSize - 17));
+            }
         }
         break;
 
     case BANANA:
         if (!sliced)
         {
-            // Yellow banana (curved rectangle)
+            // Yellow banana with gradient and curvature
             SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
 
-            // Draw a curved banana shape
+            // Draw a curved banana shape with gradient
             for (int i = -20; i <= 20; i++)
             {
                 float angle = (float)i / 20.0f * 3.14f;
                 float cx = x + cos(angle + rotation) * halfSize * 0.8f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.3f;
-                filledCircleRGBA(renderer, cx, cy, 8, 255, 255, 0, 255);
+
+                // Gradient from yellow to slightly darker yellow
+                int shade = 255 - abs(i) * 3;
+                filledCircleRGBA(renderer, cx, cy, 8, shade, shade, 0, 255);
+            }
+
+            // Add shadows and highlights
+            for (int i = -18; i <= -5; i++)
+            {
+                float angle = (float)i / 20.0f * 3.14f;
+                float cx = x + cos(angle + rotation) * halfSize * 0.75f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.25f;
+                filledCircleRGBA(renderer, cx, cy, 3, 255, 255, 150, 150);
+            }
+
+            // Banana ends (darker)
+            for (int i = -20; i <= -18; i++)
+            {
+                float angle = (float)i / 20.0f * 3.14f;
+                float cx = x + cos(angle + rotation) * halfSize * 0.8f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.3f;
+                filledCircleRGBA(renderer, cx, cy, 6, 200, 180, 0, 255);
+            }
+
+            for (int i = 18; i <= 20; i++)
+            {
+                float angle = (float)i / 20.0f * 3.14f;
+                float cx = x + cos(angle + rotation) * halfSize * 0.8f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.3f;
+                filledCircleRGBA(renderer, cx, cy, 6, 200, 180, 0, 255);
             }
         }
         else
         {
-            // Sliced banana
+            // Sliced banana with more detailed inside
             SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
 
+            // Left half
             for (int i = -10; i <= 0; i++)
             {
                 float angle = (float)i / 10.0f * 3.14f;
                 float cx = x - 15 + cos(angle + rotation) * halfSize * 0.7f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.3f;
-                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 0, 255);
+                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 30, 255);
             }
 
+            // Right half
             for (int i = 0; i <= 10; i++)
             {
                 float angle = (float)i / 10.0f * 3.14f;
                 float cx = x + 15 + cos(angle + rotation) * halfSize * 0.7f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.3f;
-                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 0, 255);
+                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 30, 255);
+            }
+
+            // Inside (creamy white)
+            for (int i = -8; i <= 0; i++)
+            {
+                float angle = (float)i / 8.0f * 3.14f;
+                float cx = x - 15 + cos(angle + rotation) * halfSize * 0.5f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.2f;
+                filledCircleRGBA(renderer, cx, cy, 4, 255, 250, 220, 255);
+            }
+
+            for (int i = 0; i <= 8; i++)
+            {
+                float angle = (float)i / 8.0f * 3.14f;
+                float cx = x + 15 + cos(angle + rotation) * halfSize * 0.5f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.2f;
+                filledCircleRGBA(renderer, cx, cy, 4, 255, 250, 220, 255);
+            }
+
+            // Seeds
+            SDL_SetRenderDrawColor(renderer, 30, 30, 0, 255);
+            for (int i = -2; i <= 2; i++)
+            {
+                SDL_Rect seed1 = {x - 15 + i * 5, y, 2, 2};
+                SDL_Rect seed2 = {x + 15 + i * 5, y, 2, 2};
+                SDL_RenderFillRect(renderer, &seed1);
+                SDL_RenderFillRect(renderer, &seed2);
             }
         }
         break;
@@ -182,43 +286,90 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
     case ORANGE:
         if (!sliced)
         {
-            // Orange circle
-            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 165, 0, 255);
+            // Orange with texture and gradient
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 140, 0, 255);
+            filledCircleRGBA(renderer, x, y, halfSize - 8, 255, 165, 0, 255);
+            // Highlight
+            filledCircleRGBA(renderer, x - halfSize / 3, y - halfSize / 3, halfSize / 4, 255, 200, 100, 200);
 
             // Texture dots
             SDL_SetRenderDrawColor(renderer, 200, 120, 0, 255);
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 20; i++)
             {
-                float angle = 2.0f * 3.14f * i / 10.0f + rotation;
-                float cx = x + cos(angle) * (halfSize - 15);
-                float cy = y + sin(angle) * (halfSize - 15);
-                filledCircleRGBA(renderer, cx, cy, 3, 200, 120, 0, 255);
+                float angle = 2.0f * 3.14f * i / 20.0f + rotation;
+                float radius = halfSize - 10 - (rand() % 8);
+                float cx = x + cos(angle) * radius;
+                float cy = y + sin(angle) * radius;
+                filledCircleRGBA(renderer, cx, cy, 2, 220, 140, 0, 200);
             }
+
+            // Stem/leaf detail at top
+            SDL_SetRenderDrawColor(renderer, 50, 100, 0, 255);
+            SDL_Rect stem = {x - 4, y - halfSize + 2, 8, 6};
+            SDL_RenderFillRect(renderer, &stem);
+
+            // Small leaf
+            SDL_SetRenderDrawColor(renderer, 0, 130, 0, 255);
+            SDL_Point leaf[3] = {
+                {x, y - halfSize + 5},
+                {x + 10, y - halfSize},
+                {x + 5, y - halfSize + 8}};
+            SDL_RenderDrawLines(renderer, leaf, 3);
         }
         else
         {
-            // Sliced orange - two halves with visible inside
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 165, 0, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 165, 0, 255);
+            // Sliced orange with detailed segments
+            // Outer rind
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 140, 0, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 140, 0, 255);
+
+            // White pith layer
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 12, 255, 220, 180, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 12, 255, 220, 180, 255);
 
             // Inside pulp
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 200, 150, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 200, 150, 255);
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 180, 100, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 180, 100, 255);
 
-            // Segment lines
-            SDL_SetRenderDrawColor(renderer, 255, 140, 0, 255);
-            for (int i = 0; i < 6; i++)
+            // Segment lines with thickness
+            SDL_SetRenderDrawColor(renderer, 255, 200, 150, 255);
+            for (int i = 0; i < 8; i++)
             {
-                float angle = 3.14f * i / 6.0f;
-                SDL_RenderDrawLine(renderer,
-                                   x - 15, y,
-                                   x - 15 + cos(angle) * (halfSize - 15),
-                                   y + sin(angle) * (halfSize - 15));
+                float angle = 2.0f * M_PI * i / 8.0f;
+                for (int w = -1; w <= 1; w++)
+                {
+                    SDL_RenderDrawLine(renderer,
+                                       x - 15, y,
+                                       x - 15 + cos(angle + w * 0.05) * (halfSize - 15),
+                                       y + sin(angle + w * 0.05) * (halfSize - 15));
 
-                SDL_RenderDrawLine(renderer,
-                                   x + 15, y,
-                                   x + 15 + cos(angle) * (halfSize - 15),
-                                   y + sin(angle) * (halfSize - 15));
+                    SDL_RenderDrawLine(renderer,
+                                       x + 15, y,
+                                       x + 15 + cos(angle + w * 0.05) * (halfSize - 15),
+                                       y + sin(angle + w * 0.05) * (halfSize - 15));
+                }
+            }
+
+            // Seeds at center
+            SDL_SetRenderDrawColor(renderer, 255, 240, 200, 255);
+            filledCircleRGBA(renderer, x - 15, y, 5, 255, 240, 200, 255);
+            filledCircleRGBA(renderer, x + 15, y, 5, 255, 240, 200, 255);
+
+            // Individual seeds
+            SDL_SetRenderDrawColor(renderer, 200, 160, 50, 255);
+            for (int i = 0; i < 5; i++)
+            {
+                float angle = 2.0f * M_PI * i / 5.0f;
+                SDL_Rect seed1 = {
+                    x - 15 + cos(angle) * 3 - 1,
+                    y + sin(angle) * 3 - 1,
+                    2, 3};
+                SDL_Rect seed2 = {
+                    x + 15 + cos(angle) * 3 - 1,
+                    y + sin(angle) * 3 - 1,
+                    2, 3};
+                SDL_RenderFillRect(renderer, &seed1);
+                SDL_RenderFillRect(renderer, &seed2);
             }
         }
         break;
@@ -226,34 +377,89 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
     case BOMB:
         if (!sliced)
         {
-            // Black bomb
-            filledCircleRGBA(renderer, x, y, halfSize - 5, 10, 10, 10, 255);
+            // Black bomb with metallic sheen
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 20, 20, 20, 255);
+
+            // Metallic highlight
+            filledCircleRGBA(renderer, x - halfSize / 4, y - halfSize / 4, halfSize / 3, 40, 40, 40, 200);
+            filledCircleRGBA(renderer, x - halfSize / 3, y - halfSize / 3, halfSize / 6, 70, 70, 70, 200);
 
             // Fuse
             SDL_SetRenderDrawColor(renderer, 160, 120, 80, 255);
-            SDL_Rect fuse = {x - 2, y - halfSize - 5, 4, 15};
-            SDL_RenderFillRect(renderer, &fuse);
+            // Wavy fuse
+            for (int i = 0; i < 15; i++)
+            {
+                float wave = sin(i * 0.5) * 3;
+                SDL_Rect fuseBit = {
+                    x - 2 + wave,
+                    y - halfSize - 5 + i,
+                    4,
+                    2};
+                SDL_RenderFillRect(renderer, &fuseBit);
+            }
 
-            // Spark
+            // Spark (animated)
+            static float sparkPhase = 0.0f;
+            sparkPhase += 0.1f;
+
             SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-            SDL_Rect spark = {x - 4, y - halfSize - 10, 8, 8};
-            SDL_RenderFillRect(renderer, &spark);
+            filledCircleRGBA(renderer,
+                             x + sin(sparkPhase) * 3,
+                             y - halfSize - 10 + cos(sparkPhase) * 2,
+                             4 + sin(sparkPhase + 1.0f) * 2,
+                             255, 200 + sin(sparkPhase) * 55, 0, 255);
+
+            // Inner glow
+            filledCircleRGBA(renderer,
+                             x + sin(sparkPhase) * 2,
+                             y - halfSize - 10 + cos(sparkPhase) * 1,
+                             2,
+                             255, 255, 200, 255);
         }
         else
         {
-            // Explosion effect
-            for (int i = 0; i < 20; i++)
+            // Explosion effect with more detail and animation
+            static float explosionPhase = 0.0f;
+            explosionPhase += 0.05f;
+
+            // Central flash
+            filledCircleRGBA(renderer, x, y, halfSize, 255, 255, 200, 150);
+
+            // Fiery explosion particles
+            for (int i = 0; i < 30; i++)
             {
-                float angle = 2.0f * 3.14f * i / 20.0f;
-                float distance = (halfSize - 5) * (1.0f + ((float)rand() / RAND_MAX) * 0.5f);
+                float angle = 2.0f * M_PI * i / 30.0f + explosionPhase;
+                float speedVar = 0.6f + 0.4f * sin(i + explosionPhase);
+                float distance = (halfSize - 5) * (1.0f + ((float)rand() / RAND_MAX) * 0.8f) * speedVar;
                 float cx = x + cos(angle) * distance;
                 float cy = y + sin(angle) * distance;
 
-                Uint8 r = 200 + rand() % 56;
-                Uint8 g = 100 + rand() % 100;
-                Uint8 b = rand() % 50;
+                // Fire colors
+                Uint8 r = 220 + rand() % 36;
+                Uint8 g = 100 + (i % 20) * 8;
+                Uint8 b = rand() % 40;
 
-                filledCircleRGBA(renderer, cx, cy, 5 + rand() % 8, r, g, b, 255);
+                // Size varies based on distance
+                float size = 5 + (halfSize - distance / 5) / 5;
+
+                filledCircleRGBA(renderer, cx, cy, size, r, g, b, 255);
+
+                // Smaller bright center
+                filledCircleRGBA(renderer, cx, cy, size / 2, 255, 230, 200, 255);
+            }
+
+            // Smoke particles
+            for (int i = 0; i < 15; i++)
+            {
+                float angle = 2.0f * M_PI * i / 15.0f - explosionPhase;
+                float distance = (halfSize - 5) * (1.2f + ((float)rand() / RAND_MAX) * 1.0f);
+                float cx = x + cos(angle) * distance;
+                float cy = y + sin(angle) * distance;
+
+                // Gray smoke
+                Uint8 gray = 40 + rand() % 60;
+
+                filledCircleRGBA(renderer, cx, cy, 7 + rand() % 7, gray, gray, gray, 150);
             }
         }
         break;
@@ -317,9 +523,9 @@ int initGame(void)
     }
 
     // Load sound effects
-    sliceSound = Mix_LoadWAV("sounds/slice.wav");
-    bombSound = Mix_LoadWAV("sounds/explosion.wav");
-    backgroundMusic = Mix_LoadMUS("sounds/background.mp3");
+    sliceSound = Mix_LoadWAV("assets/sounds/slice.wav");
+    bombSound = Mix_LoadWAV("assets/sounds/bomb.wav");
+    backgroundMusic = Mix_LoadMUS("assets/sounds/background.wav");
 
     if (sliceSound == NULL || bombSound == NULL || backgroundMusic == NULL)
     {
@@ -348,18 +554,60 @@ int initGame(void)
             // Set render target to the background texture
             SDL_SetRenderTarget(renderer, background_texture);
 
-            // Fill with dark blue
-            SDL_SetRenderDrawColor(renderer, 10, 10, 50, 255);
-            SDL_RenderClear(renderer);
+            // Fill with dark blue gradient (night sky)
+            for (int y = 0; y < WINDOW_HEIGHT; y++)
+            {
+                // Gradient from dark blue to slightly lighter blue
+                float gradientFactor = (float)y / WINDOW_HEIGHT;
+                Uint8 r = 5 + (int)(15 * gradientFactor);
+                Uint8 g = 5 + (int)(10 * gradientFactor);
+                Uint8 b = 40 + (int)(20 * gradientFactor);
 
-            // Draw some stars
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            for (int i = 0; i < 100; i++)
+                SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+                SDL_RenderDrawLine(renderer, 0, y, WINDOW_WIDTH, y);
+            }
+
+            // Draw some stars with varying brightness
+            srand(time(NULL));
+            for (int i = 0; i < 200; i++)
             {
                 int x = rand() % WINDOW_WIDTH;
                 int y = rand() % WINDOW_HEIGHT;
-                SDL_Rect star = {x, y, 2, 2};
+                int brightness = 150 + rand() % 106;  // 150-255
+                int size = (rand() % 10 > 8) ? 2 : 1; // Occasional larger stars
+
+                SDL_SetRenderDrawColor(renderer, brightness, brightness, brightness, 255);
+                SDL_Rect star = {x, y, size, size};
                 SDL_RenderFillRect(renderer, &star);
+
+                // Add occasional twinkle effect (brighter center)
+                if (rand() % 10 == 0)
+                {
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+                    SDL_Rect twinkle = {x, y, 1, 1};
+                    SDL_RenderFillRect(renderer, &twinkle);
+                }
+            }
+
+            // Draw a few clouds
+            for (int i = 0; i < 3; i++)
+            {
+                int cloudX = rand() % WINDOW_WIDTH;
+                int cloudY = 50 + rand() % 150;
+                int cloudSize = 30 + rand() % 60;
+
+                for (int j = 0; j < 8; j++)
+                {
+                    int offsetX = (rand() % (cloudSize / 2)) - cloudSize / 4;
+                    int offsetY = (rand() % (cloudSize / 3)) - cloudSize / 6;
+                    int circleSize = cloudSize / 4 + rand() % (cloudSize / 3);
+
+                    filledCircleRGBA(renderer,
+                                     cloudX + offsetX,
+                                     cloudY + offsetY,
+                                     circleSize,
+                                     30, 30, 50, 100);
+                }
             }
 
             // Reset render target
@@ -635,14 +883,91 @@ void renderGame()
     SDL_RenderCopy(renderer, background_texture, NULL, NULL);
 
     // Draw score
-    char score_text[50];
-    sprintf(score_text, "Score: %d", score);
-    SDL_Color textColor = {255, 255, 255, 255};
 
-    // Instead of using SDL_ttf, just draw a simple text background
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
-    SDL_Rect scoreRect = {10, 10, 100, 30};
+    // Create a nice-looking score panel
+    for (int i = 0; i < 40; i++)
+    {
+        int alpha = 180 - i * 3;
+        if (alpha < 0)
+            alpha = 0;
+        SDL_SetRenderDrawColor(renderer, 30, 30, 60, alpha);
+        SDL_Rect scoreGradient = {10, 10 + i, 140, 1};
+        SDL_RenderFillRect(renderer, &scoreGradient);
+    }
+
+    // Main score box
+    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
+    SDL_Rect scoreRect = {10, 10, 140, 40};
     SDL_RenderFillRect(renderer, &scoreRect);
+
+    // Border for score box
+    SDL_SetRenderDrawColor(renderer, 100, 100, 200, 255);
+    SDL_Rect scoreBorder = {10, 10, 140, 40};
+    SDL_RenderDrawRect(renderer, &scoreBorder);
+
+    // Score text (since we don't have SDL_ttf loaded, we'll draw a stylized number)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    char scoreStr[20];
+    sprintf(scoreStr, "%d", score);
+
+    // Draw "SCORE:" text
+    int textX = 20;
+    int textY = 17;
+
+    // S
+    SDL_Rect sRect[] = {
+        {textX, textY, 3, 2},
+        {textX, textY + 2, 3, 2},
+        {textX, textY + 4, 3, 2},
+        {textX + 3, textY, 3, 2},
+        {textX + 3, textY + 4, 3, 2}};
+    for (int i = 0; i < 5; i++)
+    {
+        SDL_RenderFillRect(renderer, &sRect[i]);
+    }
+
+    // Draw score number
+    int digitWidth = 15;
+    int digitX = 90;
+    int digitY = 20;
+
+    // Display score as a digital-style number
+    for (int i = 0; scoreStr[i] != '\0'; i++)
+    {
+        int digit = scoreStr[i] - '0';
+
+        // Base for all digits
+        SDL_Rect digitBase = {digitX + i * digitWidth, digitY, 10, 20};
+
+        // Draw segments based on which digit
+        switch (digit)
+        {
+        case 0:
+            SDL_RenderDrawRect(renderer, &digitBase);
+            break;
+        case 1:
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth + 10, digitY,
+                               digitX + i * digitWidth + 10, digitY + 20);
+            break;
+        case 2:
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY,
+                               digitX + i * digitWidth + 10, digitY);
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth + 10, digitY,
+                               digitX + i * digitWidth + 10, digitY + 10);
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
+                               digitX + i * digitWidth + 10, digitY + 10);
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
+                               digitX + i * digitWidth, digitY + 20);
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 20,
+                               digitX + i * digitWidth + 10, digitY + 20);
+            break;
+        default:
+            // Simple digit display for others
+            SDL_RenderDrawRect(renderer, &digitBase);
+            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
+                               digitX + i * digitWidth + 10, digitY + 10);
+        }
+    }
 
     // Draw each game object
     for (int i = 0; i < MAX_FRUITS; i++)
@@ -675,8 +1000,77 @@ void renderGame()
     // Draw slicing effect when mouse is down
     if (mouse_down && (prev_mouse_x != mouse_x || prev_mouse_y != mouse_y))
     {
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
-        SDL_RenderDrawLine(renderer, prev_mouse_x, prev_mouse_y, mouse_x, mouse_y);
+        // Create dynamic slice trail
+        static float trailOpacity[10] = {0}; // Opacity values for trailing segments
+        static int trailX[10] = {0};         // X positions for trail segments
+        static int trailY[10] = {0};         // Y positions for trail segments
+
+        // Shift trail values
+        for (int i = 9; i > 0; i--)
+        {
+            trailX[i] = trailX[i - 1];
+            trailY[i] = trailY[i - 1];
+            trailOpacity[i] = trailOpacity[i - 1] * 0.8f; // Fade out
+        }
+
+        // Add new point to trail
+        trailX[0] = mouse_x;
+        trailY[0] = mouse_y;
+        trailOpacity[0] = 0.9f;
+
+        // Draw trail with gradient
+        for (int i = 1; i < 10; i++)
+        {
+            if (trailOpacity[i] > 0.05f)
+            {
+                int alpha = (int)(trailOpacity[i] * 255);
+                int thickness = 3 - i / 3;
+                if (thickness < 1)
+                    thickness = 1;
+
+                // White core with blue outer glow
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
+                SDL_RenderDrawLine(renderer, trailX[i - 1], trailY[i - 1], trailX[i], trailY[i]);
+
+                // Thicker colored trail
+                for (int t = 1; t <= thickness; t++)
+                {
+                    // Different colors for a rainbow effect
+                    SDL_SetRenderDrawColor(renderer,
+                                           100 + (i * 15),
+                                           150 + ((i + 3) % 10) * 10,
+                                           255,
+                                           alpha / (t + 1));
+
+                    // Draw parallel lines to create thickness
+                    float angle = atan2(trailY[i] - trailY[i - 1], trailX[i] - trailX[i - 1]) + M_PI / 2;
+
+                    int offsetX = (int)(cos(angle) * t);
+                    int offsetY = (int)(sin(angle) * t);
+
+                    SDL_RenderDrawLine(renderer,
+                                       trailX[i - 1] + offsetX, trailY[i - 1] + offsetY,
+                                       trailX[i] + offsetX, trailY[i] + offsetY);
+
+                    SDL_RenderDrawLine(renderer,
+                                       trailX[i - 1] - offsetX, trailY[i - 1] - offsetY,
+                                       trailX[i] - offsetX, trailY[i] - offsetY);
+                }
+
+                // Add sparkle effects at intervals
+                if (i % 3 == 0)
+                {
+                    int sparkleSize = 3 - i / 4;
+                    if (sparkleSize > 0)
+                    {
+                        SDL_SetRenderDrawColor(renderer, 255, 255, 220, alpha);
+                        SDL_Rect sparkle = {trailX[i] - sparkleSize / 2, trailY[i] - sparkleSize / 2,
+                                            sparkleSize, sparkleSize};
+                        SDL_RenderFillRect(renderer, &sparkle);
+                    }
+                }
+            }
+        }
     }
 
     // Present rendered frame
