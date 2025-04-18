@@ -47,7 +47,7 @@ What sets NinjaFruit apart is its tight integration of Operating System concepts
 
 ### Core Gameplay Loop
 
-Fruits and bombs are thrown from the bottom of the screen in random patterns. The player slices fruits with mouse movements to gain points while avoiding bombs that reduce score. Power-ups occasionally appear to provide special abilities. The challenge increases as the player progresses, with faster and more numerous objects appearing on screen.
+Fruits and bombs spawn from the top of the screen in random patterns. The player slices fruits with mouse movements to gain points while avoiding bombs that reduce score. Power-ups occasionally appear to provide special abilities. The challenge increases as the player progresses, with faster and more numerous objects appearing on screen.
 
 ## Gameplay Mechanics
 
