@@ -10,8 +10,9 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
+#include <math.h>
+#include <stdbool.h>
 
 // Game constants
 #define WINDOW_WIDTH 800
@@ -20,6 +21,10 @@
 #define FRUIT_TYPES 3  // Apple, Banana, Orange
 #define BOMB_CHANCE 10 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
+
+// Slicing animation constants
+#define SLICE_PIECES 2
+#define SLICE_DURATION 30 // frames
 
 // Game data structures
 typedef enum
@@ -30,17 +35,29 @@ typedef enum
     BOMB
 } ObjectType;
 
+typedef struct SlicePiece
+{
+    float x;
+    float y;
+    float vx;
+    float vy;
+    float rotation;
+    float rotSpeed;
+    int timeLeft;
+} SlicePiece;
+
 typedef struct
 {
-    float x;          // x position
-    float y;          // y position
-    float velocity;   // speed
-    int active;       // whether the fruit is active
-    ObjectType type;  // type of object
-    int sliced;       // whether the fruit has been sliced
-    float rotation;   // rotation angle
-    float rotSpeed;   // rotation speed
-    SDL_Rect srcRect; // source rectangle for sprite
+    float x;                         // x position
+    float y;                         // y position
+    float vx;                        // x velocity component
+    float vy;                        // y velocity component
+    int active;                      // whether the fruit is active
+    ObjectType type;                 // type of object
+    int sliced;                      // whether the fruit has been sliced
+    float rotation;                  // rotation angle
+    float rotSpeed;                  // rotation speed
+    SlicePiece pieces[SLICE_PIECES]; // Pieces when sliced
 } GameObject;
 
 // Global variables
@@ -54,7 +71,6 @@ int spawn_pipe[2]; // Pipe for communicating with spawn process
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *background_texture = NULL;
-SDL_Texture *fruit_textures[4]; // APPLE, BANANA, ORANGE, BOMB
 
 // Sound effects
 Mix_Chunk *sliceSound = NULL;
@@ -67,7 +83,7 @@ int prev_mouse_x = 0, prev_mouse_y = 0;
 int mouse_down = 0;
 
 // Function prototypes
-void initGame();
+int initGame(void);
 void *spawnObjects(void *arg);
 void handleEvents();
 void updateGame();
@@ -76,130 +92,283 @@ void cleanupGame();
 void saveScore();
 void signalHandler(int sig);
 void processSpawner();
+void drawFruit(ObjectType type, float x, float y, float rotation, int sliced);
+void filledCircleRGBA(SDL_Renderer *renderer, int x, int y, int radius, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
 
-// Initialize SDL and game resources
-void initGame()
+// Draw fruit function - renders different types of fruits/bombs
+void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
+{
+    const int halfSize = FRUIT_SIZE / 2;
+
+    // Set up transformation (translate to center and rotate)
+    SDL_Point center = {halfSize, halfSize};
+    SDL_Rect dest = {x - halfSize, y - halfSize, FRUIT_SIZE, FRUIT_SIZE};
+
+    // Different colors and shapes for different fruits
+    switch (type)
+    {
+    case APPLE:
+        if (!sliced)
+        {
+            // Red apple
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 0, 0, 255);
+
+            // Stem
+            SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
+            SDL_Rect stem = {x - 3, y - halfSize + 5, 6, 10};
+            SDL_RenderFillRect(renderer, &stem);
+
+            // Leaf
+            SDL_SetRenderDrawColor(renderer, 0, 128, 0, 255);
+            SDL_Point leaf[3] = {
+                {x + 8, y - halfSize + 8},
+                {x + 18, y - halfSize + 2},
+                {x + 6, y - halfSize + 2}};
+            SDL_RenderDrawLines(renderer, leaf, 3);
+            SDL_RenderFillRect(renderer, &stem);
+        }
+        else
+        {
+            // Sliced apple - two halves
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 0, 0, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 0, 0, 255);
+
+            // White inside
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 240, 240, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 240, 240, 255);
+        }
+        break;
+
+    case BANANA:
+        if (!sliced)
+        {
+            // Yellow banana (curved rectangle)
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+
+            // Draw a curved banana shape
+            for (int i = -20; i <= 20; i++)
+            {
+                float angle = (float)i / 20.0f * 3.14f;
+                float cx = x + cos(angle + rotation) * halfSize * 0.8f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.3f;
+                filledCircleRGBA(renderer, cx, cy, 8, 255, 255, 0, 255);
+            }
+        }
+        else
+        {
+            // Sliced banana
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+
+            for (int i = -10; i <= 0; i++)
+            {
+                float angle = (float)i / 10.0f * 3.14f;
+                float cx = x - 15 + cos(angle + rotation) * halfSize * 0.7f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.3f;
+                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 0, 255);
+            }
+
+            for (int i = 0; i <= 10; i++)
+            {
+                float angle = (float)i / 10.0f * 3.14f;
+                float cx = x + 15 + cos(angle + rotation) * halfSize * 0.7f;
+                float cy = y + sin(angle + rotation) * halfSize * 0.3f;
+                filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 0, 255);
+            }
+        }
+        break;
+
+    case ORANGE:
+        if (!sliced)
+        {
+            // Orange circle
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 165, 0, 255);
+
+            // Texture dots
+            SDL_SetRenderDrawColor(renderer, 200, 120, 0, 255);
+            for (int i = 0; i < 10; i++)
+            {
+                float angle = 2.0f * 3.14f * i / 10.0f + rotation;
+                float cx = x + cos(angle) * (halfSize - 15);
+                float cy = y + sin(angle) * (halfSize - 15);
+                filledCircleRGBA(renderer, cx, cy, 3, 200, 120, 0, 255);
+            }
+        }
+        else
+        {
+            // Sliced orange - two halves with visible inside
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 165, 0, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 165, 0, 255);
+
+            // Inside pulp
+            filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 200, 150, 255);
+            filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 200, 150, 255);
+
+            // Segment lines
+            SDL_SetRenderDrawColor(renderer, 255, 140, 0, 255);
+            for (int i = 0; i < 6; i++)
+            {
+                float angle = 3.14f * i / 6.0f;
+                SDL_RenderDrawLine(renderer,
+                                   x - 15, y,
+                                   x - 15 + cos(angle) * (halfSize - 15),
+                                   y + sin(angle) * (halfSize - 15));
+
+                SDL_RenderDrawLine(renderer,
+                                   x + 15, y,
+                                   x + 15 + cos(angle) * (halfSize - 15),
+                                   y + sin(angle) * (halfSize - 15));
+            }
+        }
+        break;
+
+    case BOMB:
+        if (!sliced)
+        {
+            // Black bomb
+            filledCircleRGBA(renderer, x, y, halfSize - 5, 10, 10, 10, 255);
+
+            // Fuse
+            SDL_SetRenderDrawColor(renderer, 160, 120, 80, 255);
+            SDL_Rect fuse = {x - 2, y - halfSize - 5, 4, 15};
+            SDL_RenderFillRect(renderer, &fuse);
+
+            // Spark
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+            SDL_Rect spark = {x - 4, y - halfSize - 10, 8, 8};
+            SDL_RenderFillRect(renderer, &spark);
+        }
+        else
+        {
+            // Explosion effect
+            for (int i = 0; i < 20; i++)
+            {
+                float angle = 2.0f * 3.14f * i / 20.0f;
+                float distance = (halfSize - 5) * (1.0f + ((float)rand() / RAND_MAX) * 0.5f);
+                float cx = x + cos(angle) * distance;
+                float cy = y + sin(angle) * distance;
+
+                Uint8 r = 200 + rand() % 56;
+                Uint8 g = 100 + rand() % 100;
+                Uint8 b = rand() % 50;
+
+                filledCircleRGBA(renderer, cx, cy, 5 + rand() % 8, r, g, b, 255);
+            }
+        }
+        break;
+    }
+}
+
+// Helper function for drawing filled circles since SDL doesn't provide one
+void filledCircleRGBA(SDL_Renderer *renderer, int x, int y, int radius, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
+{
+    SDL_SetRenderDrawColor(renderer, r, g, b, a);
+
+    for (int w = 0; w < radius * 2; w++)
+    {
+        for (int h = 0; h < radius * 2; h++)
+        {
+            int dx = radius - w;
+            int dy = radius - h;
+            if ((dx * dx + dy * dy) <= (radius * radius))
+            {
+                SDL_RenderDrawPoint(renderer, x + dx - radius, y + dy - radius);
+            }
+        }
+    }
+}
+
+// Function to initialize the game
+int initGame(void)
 {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
     {
-        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-    }
-
-    // Initialize SDL_image
-    int imgFlags = IMG_INIT_PNG;
-    if (!(IMG_Init(imgFlags) & imgFlags))
-    {
-        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-        SDL_Quit();
-        exit(EXIT_FAILURE);
-    }
-
-    // Initialize SDL_mixer
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
-    {
-        printf("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
-        IMG_Quit();
-        SDL_Quit();
-        exit(EXIT_FAILURE);
+        printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
+        return 0;
     }
 
     // Create window
-    window = SDL_CreateWindow("NinjaFruit Game", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                              WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Ninja Fruit",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              WINDOW_WIDTH, WINDOW_HEIGHT,
+                              SDL_WINDOW_SHOWN);
     if (window == NULL)
     {
-        printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-        Mix_CloseAudio();
-        IMG_Quit();
-        SDL_Quit();
-        exit(EXIT_FAILURE);
+        printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
+        return 0;
     }
 
     // Create renderer
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (renderer == NULL)
     {
-        printf("Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
-        SDL_DestroyWindow(window);
-        Mix_CloseAudio();
-        IMG_Quit();
-        SDL_Quit();
-        exit(EXIT_FAILURE);
+        printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
+        return 0;
     }
 
-    // Load fruit textures
-    fruit_textures[APPLE] = IMG_LoadTexture(renderer, "assets/images/apple.png");
-    fruit_textures[BANANA] = IMG_LoadTexture(renderer, "assets/images/banana.png");
-    fruit_textures[ORANGE] = IMG_LoadTexture(renderer, "assets/images/orange.png");
-    fruit_textures[BOMB] = IMG_LoadTexture(renderer, "assets/images/bomb.png");
-
-    // Check texture loading success
-    for (int i = 0; i < 4; i++)
+    // Initialize SDL_mixer
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
     {
-        if (fruit_textures[i] == NULL)
-        {
-            printf("Failed to load texture %d! SDL_image Error: %s\n", i, IMG_GetError());
-        }
+        printf("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
+        // Continue without sound
     }
 
     // Load sound effects
-    sliceSound = Mix_LoadWAV("assets/sounds/slice.wav");
-    bombSound = Mix_LoadWAV("assets/sounds/bomb.wav");
-    backgroundMusic = Mix_LoadMUS("assets/sounds/background.wav");
+    sliceSound = Mix_LoadWAV("sounds/slice.wav");
+    bombSound = Mix_LoadWAV("sounds/explosion.wav");
+    backgroundMusic = Mix_LoadMUS("sounds/background.mp3");
 
     if (sliceSound == NULL || bombSound == NULL || backgroundMusic == NULL)
     {
-        printf("Failed to load sound effects! SDL_mixer Error: %s\n", Mix_GetError());
+        printf("Warning: Could not load sounds! SDL_mixer Error: %s\n", Mix_GetError());
+        // Continue without sound
     }
 
-    // Create background (gradient blue)
-    SDL_Surface *bg_surface = SDL_CreateRGBSurface(0, WINDOW_WIDTH, WINDOW_HEIGHT, 32, 0, 0, 0, 0);
+    // Create a solid color background if no background image is available
+    background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                           SDL_TEXTUREACCESS_TARGET, WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    // Create a gradient background (dark blue to light blue)
-    Uint32 *pixels = (Uint32 *)bg_surface->pixels;
-    for (int y = 0; y < WINDOW_HEIGHT; y++)
+    if (background_texture == NULL)
     {
-        // Calculate gradient color (dark blue at bottom, light blue at top)
-        Uint8 blue = 50 + (150 * y / WINDOW_HEIGHT);
-        Uint8 green = 10 + (70 * y / WINDOW_HEIGHT);
-        Uint32 color = SDL_MapRGB(bg_surface->format, 10, green, blue);
+        printf("Background texture could not be created! SDL Error: %s\n", SDL_GetError());
+        // Create a simple colored background
+        background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                               SDL_TEXTUREACCESS_TARGET, WINDOW_WIDTH, WINDOW_HEIGHT);
 
-        for (int x = 0; x < WINDOW_WIDTH; x++)
+        if (background_texture == NULL)
         {
-            pixels[y * bg_surface->pitch / 4 + x] = color;
+            printf("Could not create fallback background texture! SDL Error: %s\n", SDL_GetError());
+            // Continue without background
         }
-    }
-
-    // Add some stars
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    for (int i = 0; i < 100; i++)
-    {
-        int x = rand() % WINDOW_WIDTH;
-        int y = rand() % WINDOW_HEIGHT;
-        int size = 1 + rand() % 3;
-
-        for (int sy = -size / 2; sy <= size / 2; sy++)
+        else
         {
-            for (int sx = -size / 2; sx <= size / 2; sx++)
+            // Set render target to the background texture
+            SDL_SetRenderTarget(renderer, background_texture);
+
+            // Fill with dark blue
+            SDL_SetRenderDrawColor(renderer, 10, 10, 50, 255);
+            SDL_RenderClear(renderer);
+
+            // Draw some stars
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            for (int i = 0; i < 100; i++)
             {
-                if (x + sx >= 0 && x + sx < WINDOW_WIDTH && y + sy >= 0 && y + sy < WINDOW_HEIGHT)
-                {
-                    pixels[(y + sy) * bg_surface->pitch / 4 + (x + sx)] = SDL_MapRGB(bg_surface->format, 255, 255, 255);
-                }
+                int x = rand() % WINDOW_WIDTH;
+                int y = rand() % WINDOW_HEIGHT;
+                SDL_Rect star = {x, y, 2, 2};
+                SDL_RenderFillRect(renderer, &star);
             }
+
+            // Reset render target
+            SDL_SetRenderTarget(renderer, NULL);
         }
     }
-
-    background_texture = SDL_CreateTextureFromSurface(renderer, bg_surface);
-    SDL_FreeSurface(bg_surface);
 
     // Initialize mutex
     pthread_mutex_init(&game_mutex, NULL);
-
-    // Initialize random seed
-    srand(time(NULL));
 
     // Initialize game objects
     for (int i = 0; i < MAX_FRUITS; i++)
@@ -207,19 +376,17 @@ void initGame()
         gameObjects[i].active = 0;
     }
 
-    // Set up signal handler for clean exit
-    signal(SIGINT, signalHandler);
-
-    // Create pipe for spawn process communication
-    if (pipe(spawn_pipe) == -1)
+    // Set up spawn pipe
+    if (pipe(spawn_pipe) != 0)
     {
-        perror("Pipe creation failed");
-        cleanupGame();
-        exit(EXIT_FAILURE);
+        printf("Failed to create pipe\n");
+        return 0;
     }
 
-    // Start playing background music
-    Mix_PlayMusic(backgroundMusic, -1); // -1 for infinite loop
+    // Play background music
+    Mix_PlayMusic(backgroundMusic, -1);
+
+    return 1;
 }
 
 // Spawn objects thread function
@@ -243,19 +410,17 @@ void *spawnObjects(void *arg)
                 {
                     gameObjects[i].active = 1;
                     gameObjects[i].x = rand() % (WINDOW_WIDTH - FRUIT_SIZE);
-                    gameObjects[i].y = WINDOW_HEIGHT;
-                    gameObjects[i].velocity = -10.0f - (rand() % 8); // Negative to go upward
+                    gameObjects[i].y = 0; // Drop from the top of the screen
+
+                    // Random horizontal velocity component
+                    gameObjects[i].vx = -3.0f + (rand() % 60) / 10.0f;
+                    gameObjects[i].vy = 2.0f + (rand() % 30) / 10.0f; // Positive to go downward
+
                     gameObjects[i].sliced = 0;
                     gameObjects[i].rotation = 0.0f;
                     gameObjects[i].rotSpeed = 0.05f + ((float)rand() / RAND_MAX) * 0.1f;
                     if (rand() % 2)
                         gameObjects[i].rotSpeed *= -1; // Random direction
-
-                    // Set source rectangle - full texture
-                    gameObjects[i].srcRect.x = 0;
-                    gameObjects[i].srcRect.y = 0;
-                    gameObjects[i].srcRect.w = FRUIT_SIZE;
-                    gameObjects[i].srcRect.h = FRUIT_SIZE;
 
                     // Determine if it's a bomb or fruit
                     if (rand() % BOMB_CHANCE == 0)
@@ -265,6 +430,12 @@ void *spawnObjects(void *arg)
                     else
                     {
                         gameObjects[i].type = rand() % FRUIT_TYPES;
+                    }
+
+                    // Initialize slice pieces (will be used when sliced)
+                    for (int j = 0; j < SLICE_PIECES; j++)
+                    {
+                        gameObjects[i].pieces[j].timeLeft = 0;
                     }
 
                     break;
@@ -323,6 +494,26 @@ void handleEvents()
                             {
                                 gameObjects[i].sliced = 1;
 
+                                // Initialize slice pieces
+                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+
+                                // Create two pieces moving in different directions
+                                for (int j = 0; j < SLICE_PIECES; j++)
+                                {
+                                    gameObjects[i].pieces[j].x = gameObjects[i].x + FRUIT_SIZE / 2;
+                                    gameObjects[i].pieces[j].y = gameObjects[i].y + FRUIT_SIZE / 2;
+
+                                    // Different velocities for each piece
+                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+
+                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                }
+
                                 if (gameObjects[i].type == BOMB)
                                 {
                                     // Play bomb sound
@@ -371,21 +562,57 @@ void updateGame()
     {
         if (gameObjects[i].active)
         {
-            // Update position - simulate a parabolic trajectory
-            gameObjects[i].velocity += 0.2f; // Gravity effect
-            gameObjects[i].y += gameObjects[i].velocity;
+            // Update main fruit position
+            gameObjects[i].vy += 0.2f; // Gravity effect
+            gameObjects[i].x += gameObjects[i].vx;
+            gameObjects[i].y += gameObjects[i].vy;
             gameObjects[i].rotation += gameObjects[i].rotSpeed;
 
-            // Check if out of bounds
-            if (gameObjects[i].y > WINDOW_HEIGHT + FRUIT_SIZE)
+            // Update slice pieces if sliced
+            if (gameObjects[i].sliced)
             {
-                gameObjects[i].active = 0;
-
-                // Penalty for missing a fruit (not bombs)
-                if (gameObjects[i].type != BOMB && !gameObjects[i].sliced)
+                for (int j = 0; j < SLICE_PIECES; j++)
                 {
-                    score -= 1;
-                    printf("Fruit missed! Score: %d\n", score);
+                    if (gameObjects[i].pieces[j].timeLeft > 0)
+                    {
+                        gameObjects[i].pieces[j].vy += 0.3f; // Heavier gravity for pieces
+                        gameObjects[i].pieces[j].x += gameObjects[i].pieces[j].vx;
+                        gameObjects[i].pieces[j].y += gameObjects[i].pieces[j].vy;
+                        gameObjects[i].pieces[j].rotation += gameObjects[i].pieces[j].rotSpeed;
+                        gameObjects[i].pieces[j].timeLeft--;
+                    }
+                }
+            }
+
+            // Check if out of bounds
+            if (gameObjects[i].y > WINDOW_HEIGHT + FRUIT_SIZE ||
+                gameObjects[i].x < -FRUIT_SIZE ||
+                gameObjects[i].x > WINDOW_WIDTH + FRUIT_SIZE)
+            {
+                // Check if all animation is complete
+                bool animationDone = true;
+                if (gameObjects[i].sliced)
+                {
+                    for (int j = 0; j < SLICE_PIECES; j++)
+                    {
+                        if (gameObjects[i].pieces[j].timeLeft > 0)
+                        {
+                            animationDone = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (animationDone)
+                {
+                    gameObjects[i].active = 0;
+
+                    // Penalty for missing a fruit (not bombs)
+                    if (gameObjects[i].type != BOMB && !gameObjects[i].sliced)
+                    {
+                        score -= 1;
+                        printf("Fruit missed! Score: %d\n", score);
+                    }
                 }
             }
         }
@@ -397,117 +624,124 @@ void updateGame()
 // Render the game
 void renderGame()
 {
+    // Lock mutex before rendering
+    pthread_mutex_lock(&game_mutex);
+
     // Clear screen
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
     // Draw background
     SDL_RenderCopy(renderer, background_texture, NULL, NULL);
 
     // Draw score
-    char score_text[32];
+    char score_text[50];
     sprintf(score_text, "Score: %d", score);
+    SDL_Color textColor = {255, 255, 255, 255};
 
-    // Draw score as plain text using primitives
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_Rect score_bg = {10, 10, 120, 30};
-    SDL_RenderFillRect(renderer, &score_bg);
+    // Instead of using SDL_ttf, just draw a simple text background
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
+    SDL_Rect scoreRect = {10, 10, 100, 30};
+    SDL_RenderFillRect(renderer, &scoreRect);
 
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_Rect score_outline = {10, 10, 120, 30};
-    SDL_RenderDrawRect(renderer, &score_outline);
-
-    // Draw mouse trail if mouse is down
-    if (mouse_down)
-    {
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-        // Draw a thicker line for better visibility
-        for (int i = -1; i <= 1; i++)
-        {
-            for (int j = -1; j <= 1; j++)
-            {
-                SDL_RenderDrawLine(renderer,
-                                   prev_mouse_x + i, prev_mouse_y + j,
-                                   mouse_x + i, mouse_y + j);
-            }
-        }
-    }
-
-    // Draw game objects
-    pthread_mutex_lock(&game_mutex);
+    // Draw each game object
     for (int i = 0; i < MAX_FRUITS; i++)
     {
         if (gameObjects[i].active)
         {
-            SDL_Rect dest = {
-                (int)gameObjects[i].x,
-                (int)gameObjects[i].y,
-                FRUIT_SIZE,
-                FRUIT_SIZE};
-
-            // Draw fruit image with rotation
-            SDL_RenderCopyEx(renderer,
-                             fruit_textures[gameObjects[i].type],
-                             NULL,
-                             &dest,
-                             gameObjects[i].rotation * 57.2958f, // Convert to degrees
-                             NULL,
-                             SDL_FLIP_NONE);
-
-            // If sliced, draw a white line through it
-            if (gameObjects[i].sliced)
+            if (!gameObjects[i].sliced)
             {
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-                // Draw a diagonal slash through the fruit
-                for (int t = -2; t <= 2; t++)
+                // Draw unsliced fruit/bomb
+                drawFruit(gameObjects[i].type, gameObjects[i].x, gameObjects[i].y,
+                          gameObjects[i].rotation, 0);
+            }
+            else
+            {
+                // Draw sliced pieces if they still have time left
+                for (int j = 0; j < SLICE_PIECES; j++)
                 {
-                    SDL_RenderDrawLine(renderer,
-                                       dest.x + t, dest.y + t,
-                                       dest.x + dest.w + t, dest.y + dest.h + t);
+                    if (gameObjects[i].pieces[j].timeLeft > 0)
+                    {
+                        drawFruit(gameObjects[i].type,
+                                  gameObjects[i].pieces[j].x,
+                                  gameObjects[i].pieces[j].y,
+                                  gameObjects[i].pieces[j].rotation, 1);
+                    }
                 }
             }
         }
     }
-    pthread_mutex_unlock(&game_mutex);
 
-    // Update screen
-    SDL_RenderPresent(renderer);
-}
-
-// Clean up SDL resources
-void cleanupGame()
-{
-    // Stop music
-    Mix_HaltMusic();
-
-    // Free sound effects
-    Mix_FreeChunk(sliceSound);
-    Mix_FreeChunk(bombSound);
-    Mix_FreeMusic(backgroundMusic);
-
-    // Free texture resources
-    SDL_DestroyTexture(background_texture);
-    for (int i = 0; i < 4; i++)
+    // Draw slicing effect when mouse is down
+    if (mouse_down && (prev_mouse_x != mouse_x || prev_mouse_y != mouse_y))
     {
-        SDL_DestroyTexture(fruit_textures[i]);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
+        SDL_RenderDrawLine(renderer, prev_mouse_x, prev_mouse_y, mouse_x, mouse_y);
     }
 
-    // Clean up renderer and window
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    // Present rendered frame
+    SDL_RenderPresent(renderer);
+
+    // Unlock mutex after rendering
+    pthread_mutex_unlock(&game_mutex);
+}
+
+// Function to clean up resources
+void cleanupGame(void)
+{
+    // Free sounds
+    if (sliceSound != NULL)
+    {
+        Mix_FreeChunk(sliceSound);
+        sliceSound = NULL;
+    }
+
+    if (bombSound != NULL)
+    {
+        Mix_FreeChunk(bombSound);
+        bombSound = NULL;
+    }
+
+    if (backgroundMusic != NULL)
+    {
+        Mix_FreeMusic(backgroundMusic);
+        backgroundMusic = NULL;
+    }
+
+    // Free background texture
+    if (background_texture != NULL)
+    {
+        SDL_DestroyTexture(background_texture);
+        background_texture = NULL;
+    }
+
+    // Destroy renderer and window
+    if (renderer != NULL)
+    {
+        SDL_DestroyRenderer(renderer);
+        renderer = NULL;
+    }
+
+    if (window != NULL)
+    {
+        SDL_DestroyWindow(window);
+        window = NULL;
+    }
+
+    // Close audio
+    Mix_CloseAudio();
 
     // Quit SDL subsystems
-    Mix_CloseAudio();
-    IMG_Quit();
     SDL_Quit();
 
-    // Clean up mutex
+    // Destroy mutex
     pthread_mutex_destroy(&game_mutex);
 
-    // Close pipes
+    // Close pipe
     close(spawn_pipe[0]);
     close(spawn_pipe[1]);
+
+    printf("Game cleaned up successfully\n");
 }
 
 // Save high score to file
