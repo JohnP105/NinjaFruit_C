@@ -1,0 +1,45 @@
+# Executable
+ninja_fruit
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# Generated highscore file
+highscore.txt
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS specific
+.DS_Store 
