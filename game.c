@@ -64,6 +64,9 @@ typedef struct
 GameObject gameObjects[MAX_FRUITS];
 pthread_mutex_t game_mutex;
 int score = 0;
+int health = 3;        // Player health (hearts)
+int game_time = 0;     // Game timer in seconds
+Uint32 start_time = 0; // Start time in milliseconds
 int running = 1;
 int spawn_pipe[2]; // Pipe for communicating with spawn process
 
@@ -98,6 +101,7 @@ int checkCollision(float slice_x, float slice_y, GameObject *obj);
 int lineCircleIntersect(float line_x1, float line_y1, float line_x2, float line_y2, float circle_x, float circle_y, float radius);
 void spawnFruit(int index);
 void spawnFruitAt(int index, float x, float y, float vx, float vy);
+void resetGame();
 
 // Draw fruit function - renders different types of fruits/bombs
 void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
@@ -666,6 +670,12 @@ int initGame(void)
         return 0;
     }
 
+    // Initialize game variables
+    score = 0;
+    health = 3;
+    game_time = 0;
+    start_time = SDL_GetTicks();
+
     // Play background music
     Mix_PlayMusic(backgroundMusic, -1);
 
@@ -1228,8 +1238,16 @@ void handleEvents()
                                 {
                                     // Play bomb sound
                                     Mix_PlayChannel(-1, bombSound, 0);
+                                    // Reduce health when bomb is sliced
+                                    health--;
+                                    if (health <= 0)
+                                    {
+                                        printf("Game Over! Final score: %d\n", score);
+                                        health = 0; // Ensure health doesn't go below 0
+                                        // Will handle game over in main loop
+                                    }
                                     score -= 10;
-                                    printf("Bomb sliced! Score: %d\n", score);
+                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
                                 }
                                 else
                                 {
@@ -1289,8 +1307,16 @@ void handleEvents()
                                 {
                                     // Play bomb sound
                                     Mix_PlayChannel(-1, bombSound, 0);
+                                    // Reduce health when bomb is sliced
+                                    health--;
+                                    if (health <= 0)
+                                    {
+                                        printf("Game Over! Final score: %d\n", score);
+                                        health = 0; // Ensure health doesn't go below 0
+                                        // Will handle game over in main loop
+                                    }
                                     score -= 10;
-                                    printf("Bomb sliced! Score: %d\n", score);
+                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
                                 }
                                 else
                                 {
@@ -1352,8 +1378,16 @@ void handleEvents()
                                 {
                                     // Play bomb sound
                                     Mix_PlayChannel(-1, bombSound, 0);
+                                    // Reduce health when bomb is sliced
+                                    health--;
+                                    if (health <= 0)
+                                    {
+                                        printf("Game Over! Final score: %d\n", score);
+                                        health = 0; // Ensure health doesn't go below 0
+                                        // Will handle game over in main loop
+                                    }
                                     score -= 10;
-                                    printf("Bomb sliced! Score: %d\n", score);
+                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
                                 }
                                 else
                                 {
@@ -1392,6 +1426,16 @@ void handleEvents()
 void updateGame()
 {
     pthread_mutex_lock(&game_mutex);
+
+    // Update game timer
+    Uint32 current_time = SDL_GetTicks();
+    game_time = (current_time - start_time) / 1000; // Convert to seconds
+
+    // Check if game is over due to no health
+    if (health <= 0)
+    {
+        // Game over handling will be in main loop
+    }
 
     for (int i = 0; i < MAX_FRUITS; i++)
     {
@@ -1469,90 +1513,231 @@ void renderGame()
     // Draw background
     SDL_RenderCopy(renderer, background_texture, NULL, NULL);
 
-    // Draw score
-
-    // Create a nice-looking score panel
+    // ===== Draw Score Panel =====
+    // Create a nice-looking score panel in top-left
     for (int i = 0; i < 40; i++)
     {
         int alpha = 180 - i * 3;
         if (alpha < 0)
             alpha = 0;
         SDL_SetRenderDrawColor(renderer, 30, 30, 60, alpha);
-        SDL_Rect scoreGradient = {10, 10 + i, 140, 1};
+        SDL_Rect scoreGradient = {10, 10 + i, 120, 1};
         SDL_RenderFillRect(renderer, &scoreGradient);
     }
 
     // Main score box
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect scoreRect = {10, 10, 140, 40};
+    SDL_Rect scoreRect = {10, 10, 120, 40};
     SDL_RenderFillRect(renderer, &scoreRect);
 
     // Border for score box
     SDL_SetRenderDrawColor(renderer, 100, 100, 200, 255);
-    SDL_Rect scoreBorder = {10, 10, 140, 40};
+    SDL_Rect scoreBorder = {10, 10, 120, 40};
     SDL_RenderDrawRect(renderer, &scoreBorder);
 
-    // Score text (since we don't have SDL_ttf loaded, we'll draw a stylized number)
+    // Draw score text
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+    // Draw "SCORE:" label
+    int scoreTextX = 20;
+    int scoreTextY = 20;
+
+    // Display score number (simplistic digital-style)
     char scoreStr[20];
     sprintf(scoreStr, "%d", score);
-
-    // Draw "SCORE:" text
-    int textX = 20;
-    int textY = 17;
-
-    // S
-    SDL_Rect sRect[] = {
-        {textX, textY, 3, 2},
-        {textX, textY + 2, 3, 2},
-        {textX, textY + 4, 3, 2},
-        {textX + 3, textY, 3, 2},
-        {textX + 3, textY + 4, 3, 2}};
-    for (int i = 0; i < 5; i++)
-    {
-        SDL_RenderFillRect(renderer, &sRect[i]);
-    }
-
-    // Draw score number
-    int digitWidth = 15;
-    int digitX = 90;
-    int digitY = 20;
+    int digitWidth = 12;
+    int digitX = 75;
+    int digitY = 22;
 
     // Display score as a digital-style number
     for (int i = 0; scoreStr[i] != '\0'; i++)
     {
         int digit = scoreStr[i] - '0';
 
-        // Base for all digits
-        SDL_Rect digitBase = {digitX + i * digitWidth, digitY, 10, 20};
+        // Simple digital rendering - rectangles for each segment
+        // Adjust positioning based on digit
+        SDL_Rect segments[7]; // 7 segments in a digital display
 
-        // Draw segments based on which digit
-        switch (digit)
+        // Initialize segments to off position
+        for (int s = 0; s < 7; s++)
         {
-        case 0:
-            SDL_RenderDrawRect(renderer, &digitBase);
-            break;
-        case 1:
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth + 10, digitY,
-                               digitX + i * digitWidth + 10, digitY + 20);
-            break;
-        case 2:
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY,
-                               digitX + i * digitWidth + 10, digitY);
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth + 10, digitY,
-                               digitX + i * digitWidth + 10, digitY + 10);
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
-                               digitX + i * digitWidth + 10, digitY + 10);
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
-                               digitX + i * digitWidth, digitY + 20);
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 20,
-                               digitX + i * digitWidth + 10, digitY + 20);
-            break;
-        default:
-            // Simple digit display for others
-            SDL_RenderDrawRect(renderer, &digitBase);
-            SDL_RenderDrawLine(renderer, digitX + i * digitWidth, digitY + 10,
-                               digitX + i * digitWidth + 10, digitY + 10);
+            segments[s].x = digitX + i * digitWidth;
+            segments[s].y = digitY;
+            segments[s].w = 8;
+            segments[s].h = 2;
+        }
+
+        // Horizontal segments
+        segments[0].y = digitY;      // Top
+        segments[3].y = digitY + 8;  // Middle
+        segments[6].y = digitY + 16; // Bottom
+
+        // Vertical segments
+        segments[1].x = digitX + i * digitWidth + 8; // Top right
+        segments[1].y = digitY;
+        segments[1].w = 2;
+        segments[1].h = 8;
+
+        segments[2].x = digitX + i * digitWidth + 8; // Bottom right
+        segments[2].y = digitY + 8;
+        segments[2].w = 2;
+        segments[2].h = 8;
+
+        segments[4].x = digitX + i * digitWidth; // Top left
+        segments[4].y = digitY;
+        segments[4].w = 2;
+        segments[4].h = 8;
+
+        segments[5].x = digitX + i * digitWidth; // Bottom left
+        segments[5].y = digitY + 8;
+        segments[5].w = 2;
+        segments[5].h = 8;
+
+        // Define which segments are on for each digit
+        bool segmentOn[10][7] = {
+            {1, 1, 1, 0, 1, 1, 1}, // 0
+            {0, 1, 1, 0, 0, 0, 0}, // 1
+            {1, 1, 0, 1, 0, 1, 1}, // 2
+            {1, 1, 1, 1, 0, 0, 1}, // 3
+            {0, 1, 1, 1, 1, 0, 0}, // 4
+            {1, 0, 1, 1, 1, 0, 1}, // 5
+            {1, 0, 1, 1, 1, 1, 1}, // 6
+            {1, 1, 1, 0, 0, 0, 0}, // 7
+            {1, 1, 1, 1, 1, 1, 1}, // 8
+            {1, 1, 1, 1, 1, 0, 1}  // 9
+        };
+
+        // Render the active segments for this digit
+        for (int s = 0; s < 7; s++)
+        {
+            if (segmentOn[digit][s])
+            {
+                SDL_RenderFillRect(renderer, &segments[s]);
+            }
+        }
+    }
+
+    // ===== Draw Timer in top-middle =====
+    int minutes = game_time / 60;
+    int seconds = game_time % 60;
+
+    // Timer background
+    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
+    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    SDL_RenderFillRect(renderer, &timerRect);
+
+    // Timer border
+    SDL_SetRenderDrawColor(renderer, 100, 200, 100, 255);
+    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    SDL_RenderDrawRect(renderer, &timerBorder);
+
+    // Display timer as MM:SS
+    char timeStr[10];
+    sprintf(timeStr, "%02d:%02d", minutes, seconds);
+
+    // Simple rendering of the time
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    int timeX = WINDOW_WIDTH / 2 - 28;
+    int timeY = 22;
+
+    // Just a simplified time display
+    for (int i = 0; timeStr[i] != '\0'; i++)
+    {
+        if (timeStr[i] == ':')
+        {
+            // Draw colon
+            SDL_Rect colon1 = {timeX + i * 10, timeY + 5, 2, 2};
+            SDL_Rect colon2 = {timeX + i * 10, timeY + 12, 2, 2};
+            SDL_RenderFillRect(renderer, &colon1);
+            SDL_RenderFillRect(renderer, &colon2);
+        }
+        else
+        {
+            // It's a digit, draw a minimal digit representation
+            int digit = timeStr[i] - '0';
+
+            // Simple rendering - just a number shape
+            // Will use rectangles to create a simple digit form
+            switch (digit)
+            {
+            case 0:
+                SDL_Rect zero = {timeX + i * 10, timeY, 6, 16};
+                SDL_RenderDrawRect(renderer, &zero);
+                break;
+            case 1:
+                SDL_RenderDrawLine(renderer, timeX + i * 10 + 3, timeY, timeX + i * 10 + 3, timeY + 16);
+                break;
+            default:
+                SDL_Rect defaultDigit = {timeX + i * 10, timeY, 6, 16};
+                SDL_RenderDrawRect(renderer, &defaultDigit);
+
+                // Middle line for most digits
+                if (digit != 1 && digit != 7)
+                {
+                    SDL_RenderDrawLine(renderer, timeX + i * 10, timeY + 8,
+                                       timeX + i * 10 + 6, timeY + 8);
+                }
+            }
+        }
+    }
+
+    // ===== Draw Health Hearts in top-right =====
+    // Health background
+    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
+    SDL_Rect healthRect = {WINDOW_WIDTH - 130, 10, 120, 40};
+    SDL_RenderFillRect(renderer, &healthRect);
+
+    // Health border
+    SDL_SetRenderDrawColor(renderer, 200, 100, 100, 255);
+    SDL_Rect healthBorder = {WINDOW_WIDTH - 130, 10, 120, 40};
+    SDL_RenderDrawRect(renderer, &healthBorder);
+
+    // Draw hearts
+    for (int i = 0; i < 3; i++)
+    {
+        if (i < health)
+        {
+            // Full heart - red
+            SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
+        }
+        else
+        {
+            // Empty heart - gray outline
+            SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+        }
+
+        // Draw a heart shape - simplified
+        int heartX = WINDOW_WIDTH - 115 + i * 35;
+        int heartY = 25;
+
+        // Draw heart shape (very simplified)
+        SDL_Point heartPoints[] = {
+            {heartX, heartY + 5},
+            {heartX - 8, heartY - 3},
+            {heartX - 4, heartY - 7},
+            {heartX, heartY - 2},
+            {heartX + 4, heartY - 7},
+            {heartX + 8, heartY - 3},
+            {heartX, heartY + 5}};
+
+        SDL_RenderDrawLines(renderer, heartPoints, 7);
+
+        // Fill heart if it's a full heart
+        if (i < health)
+        {
+            for (int y = heartY - 6; y <= heartY + 4; y++)
+            {
+                for (int x = heartX - 7; x <= heartX + 7; x++)
+                {
+                    // Simple formula to check if point is inside heart shape
+                    int dx = x - heartX;
+                    int dy = y - heartY;
+                    if ((dx * dx + dy * dy) < 50 && y <= heartY + 5)
+                    {
+                        SDL_RenderDrawPoint(renderer, x, y);
+                    }
+                }
+            }
         }
     }
 
@@ -1713,6 +1898,52 @@ void renderGame()
                 }
             }
         }
+    }
+
+    // If game over, display a message
+    if (health <= 0)
+    {
+        // Semi-transparent overlay
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+        SDL_Rect overlay = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
+        SDL_RenderFillRect(renderer, &overlay);
+
+        // Game over message box
+        SDL_SetRenderDrawColor(renderer, 50, 50, 70, 240);
+        SDL_Rect messageBox = {WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2 - 100, 300, 200};
+        SDL_RenderFillRect(renderer, &messageBox);
+
+        // Box border
+        SDL_SetRenderDrawColor(renderer, 200, 50, 50, 255);
+        SDL_Rect messageBorder = {WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2 - 100, 300, 200};
+        SDL_RenderDrawRect(renderer, &messageBorder);
+
+        // Game Over Text
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+        // Draw "GAME OVER" text
+        // (simplified text drawing)
+        int gameOverX = WINDOW_WIDTH / 2 - 70;
+        int gameOverY = WINDOW_HEIGHT / 2 - 50;
+
+        // Draw final score
+        char finalScoreStr[40];
+        sprintf(finalScoreStr, "Final Score: %d", score);
+        int finalScoreX = WINDOW_WIDTH / 2 - 60;
+        int finalScoreY = WINDOW_HEIGHT / 2;
+
+        // Simplified rendering of "GAME OVER"
+        SDL_Rect gameOver = {gameOverX, gameOverY, 140, 30};
+        SDL_RenderDrawRect(renderer, &gameOver);
+
+        // Render "Play Again" button
+        SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
+        SDL_Rect playAgainButton = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
+        SDL_RenderFillRect(renderer, &playAgainButton);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect playAgainBorder = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
+        SDL_RenderDrawRect(renderer, &playAgainBorder);
     }
 
     // Present rendered frame
@@ -1885,6 +2116,24 @@ void checkPowerUps()
     }
 }
 
+// Function to reset the game
+void resetGame()
+{
+    // Reset score and health
+    score = 0;
+    health = 3;
+    game_time = 0;
+    start_time = SDL_GetTicks();
+
+    // Clear any existing game objects
+    for (int i = 0; i < MAX_FRUITS; i++)
+    {
+        gameObjects[i].active = 0;
+    }
+
+    printf("Game reset! Ready to play again.\n");
+}
+
 int main()
 {
     printf("NinjaFruit Game Starting!\n");
@@ -1912,6 +2161,50 @@ int main()
 
         // Render game
         renderGame();
+
+        // Handle game over state and possible restart
+        if (health <= 0)
+        {
+            // Check for a click on the "Play Again" button
+            SDL_Event e;
+            while (SDL_PollEvent(&e))
+            {
+                if (e.type == SDL_QUIT)
+                {
+                    running = 0;
+                    break;
+                }
+                else if (e.type == SDL_MOUSEBUTTONDOWN)
+                {
+                    int mouseX = e.button.x;
+                    int mouseY = e.button.y;
+
+                    // Check if the click is on the "Play Again" button
+                    SDL_Rect playAgainButton = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
+                    if (mouseX >= playAgainButton.x && mouseX <= playAgainButton.x + playAgainButton.w &&
+                        mouseY >= playAgainButton.y && mouseY <= playAgainButton.y + playAgainButton.h)
+                    {
+                        // Reset the game
+                        resetGame();
+                        break;
+                    }
+                }
+                else if (e.type == SDL_KEYDOWN)
+                {
+                    if (e.key.keysym.sym == SDLK_r)
+                    {
+                        // Reset the game when 'R' is pressed
+                        resetGame();
+                        break;
+                    }
+                    else if (e.key.keysym.sym == SDLK_ESCAPE)
+                    {
+                        running = 0;
+                        break;
+                    }
+                }
+            }
+        }
 
         // Cap to ~60 FPS
         SDL_Delay(16);
