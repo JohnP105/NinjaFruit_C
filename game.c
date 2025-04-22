@@ -94,6 +94,10 @@ void signalHandler(int sig);
 void processSpawner();
 void drawFruit(ObjectType type, float x, float y, float rotation, int sliced);
 void filledCircleRGBA(SDL_Renderer *renderer, int x, int y, int radius, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+int checkCollision(float slice_x, float slice_y, GameObject *obj);
+int lineCircleIntersect(float line_x1, float line_y1, float line_x2, float line_y2, float circle_x, float circle_y, float radius);
+void spawnFruit(int index);
+void spawnFruitAt(int index, float x, float y, float vx, float vy);
 
 // Draw fruit function - renders different types of fruits/bombs
 void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
@@ -233,52 +237,64 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
         }
         else
         {
-            // Sliced banana with more detailed inside
+            // Sliced banana with more detailed inside - enhanced appearance
             SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
 
-            // Left half
+            // Separation gap between banana halves
+            float separationX = 16.0f; // Increased from 15 for more visible separation
+
+            // Left half - more curved for better visual slicing
             for (int i = -10; i <= 0; i++)
             {
                 float angle = (float)i / 10.0f * 3.14f;
-                float cx = x - 15 + cos(angle + rotation) * halfSize * 0.7f;
+                float cx = x - separationX + cos(angle + rotation) * halfSize * 0.7f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.3f;
                 filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 30, 255);
             }
 
-            // Right half
+            // Right half - more curved for better visual slicing
             for (int i = 0; i <= 10; i++)
             {
                 float angle = (float)i / 10.0f * 3.14f;
-                float cx = x + 15 + cos(angle + rotation) * halfSize * 0.7f;
+                float cx = x + separationX + cos(angle + rotation) * halfSize * 0.7f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.3f;
                 filledCircleRGBA(renderer, cx, cy, 6, 255, 255, 30, 255);
             }
 
-            // Inside (creamy white)
+            // Inside (creamy white) - more visible and contrasting
             for (int i = -8; i <= 0; i++)
             {
                 float angle = (float)i / 8.0f * 3.14f;
-                float cx = x - 15 + cos(angle + rotation) * halfSize * 0.5f;
+                float cx = x - separationX + cos(angle + rotation) * halfSize * 0.5f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.2f;
-                filledCircleRGBA(renderer, cx, cy, 4, 255, 250, 220, 255);
+                filledCircleRGBA(renderer, cx, cy, 5, 255, 250, 220, 255); // Bigger inside (was 4)
             }
 
             for (int i = 0; i <= 8; i++)
             {
                 float angle = (float)i / 8.0f * 3.14f;
-                float cx = x + 15 + cos(angle + rotation) * halfSize * 0.5f;
+                float cx = x + separationX + cos(angle + rotation) * halfSize * 0.5f;
                 float cy = y + sin(angle + rotation) * halfSize * 0.2f;
-                filledCircleRGBA(renderer, cx, cy, 4, 255, 250, 220, 255);
+                filledCircleRGBA(renderer, cx, cy, 5, 255, 250, 220, 255); // Bigger inside (was 4)
             }
 
-            // Seeds
-            SDL_SetRenderDrawColor(renderer, 30, 30, 0, 255);
+            // Seeds - darker and more visible
+            SDL_SetRenderDrawColor(renderer, 20, 20, 0, 255); // Darker seeds (was 30, 30, 0)
             for (int i = -2; i <= 2; i++)
             {
-                SDL_Rect seed1 = {x - 15 + i * 5, y, 2, 2};
-                SDL_Rect seed2 = {x + 15 + i * 5, y, 2, 2};
+                SDL_Rect seed1 = {x - separationX + i * 5, y, 3, 3}; // Bigger seeds
+                SDL_Rect seed2 = {x + separationX + i * 5, y, 3, 3}; // Bigger seeds
                 SDL_RenderFillRect(renderer, &seed1);
                 SDL_RenderFillRect(renderer, &seed2);
+            }
+
+            // Draw slice "cut line" for more obvious slice effect
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 180);
+            for (int i = -2; i <= 2; i++)
+            {
+                SDL_RenderDrawLine(renderer,
+                                   x - halfSize + 10, y + i,
+                                   x + halfSize - 10, y + i);
             }
         }
         break;
@@ -286,90 +302,109 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
     case ORANGE:
         if (!sliced)
         {
-            // Orange with texture and gradient
-            filledCircleRGBA(renderer, x, y, halfSize - 5, 255, 140, 0, 255);
-            filledCircleRGBA(renderer, x, y, halfSize - 8, 255, 165, 0, 255);
-            // Highlight
-            filledCircleRGBA(renderer, x - halfSize / 3, y - halfSize / 3, halfSize / 4, 255, 200, 100, 200);
+            // Orange with texture and gradient - adjusted to match collision radius of FRUIT_SIZE * 0.55f
+            int orangeRadius = (int)(halfSize * 0.85f); // Approximately 55% of FRUIT_SIZE (halfSize is FRUIT_SIZE/2)
+
+            // Main orange body - more consistent size
+            filledCircleRGBA(renderer, x + halfSize / 2, y + halfSize / 2, orangeRadius, 255, 140, 0, 255);
+            filledCircleRGBA(renderer, x + halfSize / 2, y + halfSize / 2, orangeRadius - 3, 255, 165, 0, 255);
+
+            // Subtle highlight (much smaller than before)
+            filledCircleRGBA(renderer,
+                             x + halfSize / 2 - orangeRadius / 4,
+                             y + halfSize / 2 - orangeRadius / 4,
+                             orangeRadius / 8, 255, 230, 180, 150);
 
             // Texture dots
             SDL_SetRenderDrawColor(renderer, 200, 120, 0, 255);
             for (int i = 0; i < 20; i++)
             {
                 float angle = 2.0f * 3.14f * i / 20.0f + rotation;
-                float radius = halfSize - 10 - (rand() % 8);
-                float cx = x + cos(angle) * radius;
-                float cy = y + sin(angle) * radius;
+                float radius = orangeRadius - 5 - (rand() % 5);
+                float cx = x + halfSize / 2 + cos(angle) * radius;
+                float cy = y + halfSize / 2 + sin(angle) * radius;
                 filledCircleRGBA(renderer, cx, cy, 2, 220, 140, 0, 200);
             }
 
             // Stem/leaf detail at top
             SDL_SetRenderDrawColor(renderer, 50, 100, 0, 255);
-            SDL_Rect stem = {x - 4, y - halfSize + 2, 8, 6};
+            SDL_Rect stem = {x + halfSize / 2 - 4, y + halfSize / 2 - orangeRadius - 2, 8, 6};
             SDL_RenderFillRect(renderer, &stem);
 
             // Small leaf
             SDL_SetRenderDrawColor(renderer, 0, 130, 0, 255);
             SDL_Point leaf[3] = {
-                {x, y - halfSize + 5},
-                {x + 10, y - halfSize},
-                {x + 5, y - halfSize + 8}};
+                {x + halfSize / 2, y + halfSize / 2 - orangeRadius + 1},
+                {x + halfSize / 2 + 10, y + halfSize / 2 - orangeRadius - 4},
+                {x + halfSize / 2 + 5, y + halfSize / 2 - orangeRadius + 4}};
             SDL_RenderDrawLines(renderer, leaf, 3);
         }
         else
         {
-            // Sliced orange with detailed segments
-            // Outer rind
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 10, 255, 140, 0, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 10, 255, 140, 0, 255);
+            // Sliced orange with detailed segments - enhanced separation
+            float separationX = 18.0f;                  // Increased from 15 for more visible separation
+            int orangeRadius = (int)(halfSize * 0.85f); // Match the unsliced radius
 
-            // White pith layer
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 12, 255, 220, 180, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 12, 255, 220, 180, 255);
+            // Outer rind - brighter color
+            filledCircleRGBA(renderer, x + halfSize / 2 - separationX, y + halfSize / 2, orangeRadius - 5, 255, 140, 0, 255);
+            filledCircleRGBA(renderer, x + halfSize / 2 + separationX, y + halfSize / 2, orangeRadius - 5, 255, 140, 0, 255);
 
-            // Inside pulp
-            filledCircleRGBA(renderer, x - 15, y, halfSize - 15, 255, 180, 100, 255);
-            filledCircleRGBA(renderer, x + 15, y, halfSize - 15, 255, 180, 100, 255);
+            // White pith layer - more contrast
+            filledCircleRGBA(renderer, x + halfSize / 2 - separationX, y + halfSize / 2, orangeRadius - 7, 255, 240, 220, 255); // Whiter
+            filledCircleRGBA(renderer, x + halfSize / 2 + separationX, y + halfSize / 2, orangeRadius - 7, 255, 240, 220, 255); // Whiter
 
-            // Segment lines with thickness
-            SDL_SetRenderDrawColor(renderer, 255, 200, 150, 255);
+            // Inside pulp - more vibrant
+            filledCircleRGBA(renderer, x + halfSize / 2 - separationX, y + halfSize / 2, orangeRadius - 10, 255, 160, 80, 255); // More orange (was 180, 100)
+            filledCircleRGBA(renderer, x + halfSize / 2 + separationX, y + halfSize / 2, orangeRadius - 10, 255, 160, 80, 255); // More orange
+
+            // Segment lines with thickness - more visible segments
+            SDL_SetRenderDrawColor(renderer, 255, 220, 180, 255); // Brighter lines
             for (int i = 0; i < 8; i++)
             {
                 float angle = 2.0f * M_PI * i / 8.0f;
-                for (int w = -1; w <= 1; w++)
+                for (int w = -2; w <= 2; w++) // Wider lines (was -1 to 1)
                 {
                     SDL_RenderDrawLine(renderer,
-                                       x - 15, y,
-                                       x - 15 + cos(angle + w * 0.05) * (halfSize - 15),
-                                       y + sin(angle + w * 0.05) * (halfSize - 15));
+                                       x + halfSize / 2 - separationX, y + halfSize / 2,
+                                       x + halfSize / 2 - separationX + cos(angle + w * 0.05) * (orangeRadius - 10),
+                                       y + halfSize / 2 + sin(angle + w * 0.05) * (orangeRadius - 10));
 
                     SDL_RenderDrawLine(renderer,
-                                       x + 15, y,
-                                       x + 15 + cos(angle + w * 0.05) * (halfSize - 15),
-                                       y + sin(angle + w * 0.05) * (halfSize - 15));
+                                       x + halfSize / 2 + separationX, y + halfSize / 2,
+                                       x + halfSize / 2 + separationX + cos(angle + w * 0.05) * (orangeRadius - 10),
+                                       y + halfSize / 2 + sin(angle + w * 0.05) * (orangeRadius - 10));
                 }
             }
 
-            // Seeds at center
+            // Seeds at center - more visible
             SDL_SetRenderDrawColor(renderer, 255, 240, 200, 255);
-            filledCircleRGBA(renderer, x - 15, y, 5, 255, 240, 200, 255);
-            filledCircleRGBA(renderer, x + 15, y, 5, 255, 240, 200, 255);
+            filledCircleRGBA(renderer, x + halfSize / 2 - separationX, y + halfSize / 2, 6, 255, 240, 200, 255);
+            filledCircleRGBA(renderer, x + halfSize / 2 + separationX, y + halfSize / 2, 6, 255, 240, 200, 255);
 
-            // Individual seeds
+            // Individual seeds - more prominent
             SDL_SetRenderDrawColor(renderer, 200, 160, 50, 255);
             for (int i = 0; i < 5; i++)
             {
                 float angle = 2.0f * M_PI * i / 5.0f;
                 SDL_Rect seed1 = {
-                    x - 15 + cos(angle) * 3 - 1,
-                    y + sin(angle) * 3 - 1,
-                    2, 3};
+                    x + halfSize / 2 - separationX + cos(angle) * 3 - 1,
+                    y + halfSize / 2 + sin(angle) * 3 - 1,
+                    3, 4}; // Bigger (was 2, 3)
                 SDL_Rect seed2 = {
-                    x + 15 + cos(angle) * 3 - 1,
-                    y + sin(angle) * 3 - 1,
-                    2, 3};
+                    x + halfSize / 2 + separationX + cos(angle) * 3 - 1,
+                    y + halfSize / 2 + sin(angle) * 3 - 1,
+                    3, 4}; // Bigger
                 SDL_RenderFillRect(renderer, &seed1);
                 SDL_RenderFillRect(renderer, &seed2);
+            }
+
+            // Draw slice "cut line" for more obvious slice effect
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 180);
+            for (int i = -2; i <= 2; i++)
+            {
+                SDL_RenderDrawLine(renderer,
+                                   x, y + halfSize / 2 + i,
+                                   x + FRUIT_SIZE, y + halfSize / 2 + i);
             }
         }
         break;
@@ -643,50 +678,148 @@ void *spawnObjects(void *arg)
     // Avoid unused parameter warning
     (void)arg;
 
+    // Variables for controlling spawn patterns
+    int spawn_mode = 0; // 0 = regular, 1 = cluster, 2 = line, 3 = arc
+    int spawn_timer = 0;
+    int spawn_cooldown = 0;
+
     while (running)
     {
         // Lock mutex before modifying shared data
         pthread_mutex_lock(&game_mutex);
 
-        // Find an inactive object slot
-        for (int i = 0; i < MAX_FRUITS; i++)
+        // Decrease spawn cooldown
+        if (spawn_cooldown > 0)
         {
-            if (!gameObjects[i].active)
+            spawn_cooldown--;
+        }
+
+        // Change spawn mode occasionally
+        spawn_timer++;
+        if (spawn_timer > 200)
+        { // About every 10 seconds
+            spawn_timer = 0;
+            spawn_mode = rand() % 4; // Select a random spawn pattern
+            printf("Spawn mode changed to: %d\n", spawn_mode);
+        }
+
+        // Regular single fruit spawning
+        if (spawn_cooldown <= 0)
+        {
+            // Count active fruits
+            int active_count = 0;
+            for (int i = 0; i < MAX_FRUITS; i++)
             {
-                // Random chance to spawn
-                if (rand() % 30 == 0)
+                if (gameObjects[i].active)
                 {
-                    gameObjects[i].active = 1;
-                    gameObjects[i].x = rand() % (WINDOW_WIDTH - FRUIT_SIZE);
-                    gameObjects[i].y = 0; // Drop from the top of the screen
+                    active_count++;
+                }
+            }
 
-                    // Random horizontal velocity component
-                    gameObjects[i].vx = -3.0f + (rand() % 60) / 10.0f;
-                    gameObjects[i].vy = 2.0f + (rand() % 30) / 10.0f; // Positive to go downward
-
-                    gameObjects[i].sliced = 0;
-                    gameObjects[i].rotation = 0.0f;
-                    gameObjects[i].rotSpeed = 0.05f + ((float)rand() / RAND_MAX) * 0.1f;
-                    if (rand() % 2)
-                        gameObjects[i].rotSpeed *= -1; // Random direction
-
-                    // Determine if it's a bomb or fruit
-                    if (rand() % BOMB_CHANCE == 0)
+            // Only spawn if we're below the limit
+            if (active_count < MAX_FRUITS - 3) // Leave room for clusters
+            {
+                if (spawn_mode == 0) // Regular spawning
+                {
+                    // Find an inactive object slot
+                    for (int i = 0; i < MAX_FRUITS; i++)
                     {
-                        gameObjects[i].type = BOMB;
+                        if (!gameObjects[i].active)
+                        {
+                            // Random chance to spawn - reduced spawn rate
+                            if (rand() % 40 == 0) // Was 20, now 40 (half as frequent)
+                            {
+                                spawnFruit(i);
+                                spawn_cooldown = 5; // Increased cooldown (was 3)
+                                break;
+                            }
+                        }
                     }
-                    else
+                }
+                else if (spawn_mode == 1 && active_count < MAX_FRUITS - 5) // Cluster spawning
+                {
+                    // Spawn a cluster of 3-5 fruits close together - less frequently
+                    if (rand() % 70 == 0) // Was 40, now 70 (less frequent)
                     {
-                        gameObjects[i].type = rand() % FRUIT_TYPES;
-                    }
+                        int cluster_size = 3 + rand() % 3; // 3-5 fruits
+                        int base_x = 100 + rand() % (WINDOW_WIDTH - 200);
+                        float base_vx = -3.0f + (rand() % 60) / 10.0f;
+                        float base_vy = 2.0f + (rand() % 30) / 10.0f;
 
-                    // Initialize slice pieces (will be used when sliced)
-                    for (int j = 0; j < SLICE_PIECES; j++)
+                        int spawned = 0;
+                        for (int i = 0; i < MAX_FRUITS && spawned < cluster_size; i++)
+                        {
+                            if (!gameObjects[i].active)
+                            {
+                                spawnFruitAt(i,
+                                             base_x + (rand() % 120 - 60),
+                                             -(rand() % 20),
+                                             base_vx + ((rand() % 20 - 10) / 10.0f),
+                                             base_vy + ((rand() % 20) / 10.0f));
+                                spawned++;
+                            }
+                        }
+                        spawn_cooldown = 70; // Increased cooldown (was 50)
+                    }
+                }
+                else if (spawn_mode == 2) // Line formation
+                {
+                    // Spawn fruits in a horizontal line for slicing swipes - less frequently
+                    if (rand() % 80 == 0) // Was 50, now 80 (less frequent)
                     {
-                        gameObjects[i].pieces[j].timeLeft = 0;
-                    }
+                        int line_count = 4 + rand() % 3; // 4-6 fruits
+                        int spacing = FRUIT_SIZE + 10;
+                        int start_x = (WINDOW_WIDTH - line_count * spacing) / 2 + rand() % 100 - 50;
+                        int y_pos = -30;
+                        float shared_vx = -1.0f + (rand() % 20) / 10.0f;
+                        float shared_vy = 2.0f + (rand() % 20) / 10.0f;
 
-                    break;
+                        int spawned = 0;
+                        for (int i = 0; i < MAX_FRUITS && spawned < line_count; i++)
+                        {
+                            if (!gameObjects[i].active)
+                            {
+                                spawnFruitAt(i,
+                                             start_x + spacing * spawned,
+                                             y_pos + (rand() % 20 - 10),
+                                             shared_vx,
+                                             shared_vy);
+                                spawned++;
+                            }
+                        }
+                        spawn_cooldown = 90; // Increased cooldown (was 60)
+                    }
+                }
+                else if (spawn_mode == 3) // Arc formation
+                {
+                    // Spawn fruits in an arc pattern - less frequently
+                    if (rand() % 100 == 0) // Was 60, now 100 (less frequent)
+                    {
+                        int arc_count = 5 + rand() % 3; // 5-7 fruits
+                        float arc_radius = 100.0f + rand() % 50;
+                        float arc_center_x = WINDOW_WIDTH / 2 + rand() % 200 - 100;
+                        float arc_start = -M_PI / 4 - (rand() % 20) / 100.0f;
+                        float arc_end = M_PI / 4 + (rand() % 20) / 100.0f;
+                        float arc_step = (arc_end - arc_start) / (arc_count - 1);
+
+                        float shared_vy = 3.0f + (rand() % 20) / 10.0f;
+
+                        int spawned = 0;
+                        for (int i = 0; i < MAX_FRUITS && spawned < arc_count; i++)
+                        {
+                            if (!gameObjects[i].active)
+                            {
+                                float angle = arc_start + arc_step * spawned;
+                                float x_pos = arc_center_x + cos(angle) * arc_radius;
+                                float y_pos = -30;
+                                float vx = sin(angle) * 2.0f;
+
+                                spawnFruitAt(i, x_pos, y_pos, vx, shared_vy);
+                                spawned++;
+                            }
+                        }
+                        spawn_cooldown = 110; // Increased cooldown (was 70)
+                    }
                 }
             }
         }
@@ -701,10 +834,244 @@ void *spawnObjects(void *arg)
     return NULL;
 }
 
+// Helper function to spawn a fruit with default parameters
+void spawnFruit(int index)
+{
+    gameObjects[index].active = 1;
+    gameObjects[index].x = rand() % (WINDOW_WIDTH - FRUIT_SIZE);
+    gameObjects[index].y = 0; // Drop from the top of the screen
+
+    // Random horizontal velocity component with increased speed
+    gameObjects[index].vx = (-3.0f + (rand() % 60) / 10.0f) * 1.3f; // 30% faster
+    gameObjects[index].vy = (2.0f + (rand() % 30) / 10.0f) * 1.3f;  // 30% faster
+
+    gameObjects[index].sliced = 0;
+    gameObjects[index].rotation = 0.0f;
+    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.2f; // Slightly faster rotation
+    if (rand() % 2)
+        gameObjects[index].rotSpeed *= -1; // Random direction
+
+    // Determine if it's a bomb or fruit
+    if (rand() % BOMB_CHANCE == 0)
+    {
+        gameObjects[index].type = BOMB;
+    }
+    else
+    {
+        gameObjects[index].type = rand() % FRUIT_TYPES;
+    }
+
+    // Initialize slice pieces (will be used when sliced)
+    for (int j = 0; j < SLICE_PIECES; j++)
+    {
+        gameObjects[index].pieces[j].timeLeft = 0;
+    }
+}
+
+// Helper function to spawn a fruit at specific position with specific velocity
+void spawnFruitAt(int index, float x, float y, float vx, float vy)
+{
+    gameObjects[index].active = 1;
+    gameObjects[index].x = x;
+    gameObjects[index].y = y;
+
+    // Apply speed multiplier
+    gameObjects[index].vx = vx * 1.3f; // 30% faster
+    gameObjects[index].vy = vy * 1.3f; // 30% faster
+
+    gameObjects[index].sliced = 0;
+    gameObjects[index].rotation = 0.0f;
+    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.2f;
+    if (rand() % 2)
+        gameObjects[index].rotSpeed *= -1; // Random direction
+
+    // Determine if it's a bomb or fruit (less bombs in formations)
+    if (rand() % (BOMB_CHANCE * 2) == 0) // Half as many bombs in formations
+    {
+        gameObjects[index].type = BOMB;
+    }
+    else
+    {
+        gameObjects[index].type = rand() % FRUIT_TYPES;
+    }
+
+    // Initialize slice pieces (will be used when sliced)
+    for (int j = 0; j < SLICE_PIECES; j++)
+    {
+        gameObjects[index].pieces[j].timeLeft = 0;
+    }
+}
+
+// Function to detect line segment intersection with circle
+// Used to detect if the slice path intersects a fruit
+int lineCircleIntersect(float line_x1, float line_y1, float line_x2, float line_y2, float circle_x, float circle_y, float radius)
+{
+    // Vector from line start to circle center
+    float dx = circle_x - line_x1;
+    float dy = circle_y - line_y1;
+
+    // Vector of the line
+    float line_dx = line_x2 - line_x1;
+    float line_dy = line_y2 - line_y1;
+
+    // Length squared of the line segment
+    float line_len_sq = line_dx * line_dx + line_dy * line_dy;
+
+    // Exit early if line has zero length
+    if (line_len_sq == 0)
+    {
+        return dx * dx + dy * dy <= radius * radius;
+    }
+
+    // Calculate projection of circle center onto line
+    float t = (dx * line_dx + dy * line_dy) / line_len_sq;
+
+    // Clamp t to [0,1] for line segment
+    if (t < 0)
+        t = 0;
+    if (t > 1)
+        t = 1;
+
+    // Find closest point on line segment to circle center
+    float closest_x = line_x1 + t * line_dx;
+    float closest_y = line_y1 + t * line_dy;
+
+    // Check if this point is within the circle
+    float dist_x = closest_x - circle_x;
+    float dist_y = closest_y - circle_y;
+    float dist_sq = dist_x * dist_x + dist_y * dist_y;
+
+    return dist_sq <= radius * radius;
+}
+
+// Improved collision detection function to account for velocity
+int checkCollision(float slice_x, float slice_y, GameObject *obj)
+{
+    // Get center coordinates and boundaries
+    float center_x = obj->x + FRUIT_SIZE / 2;
+    float center_y = obj->y + FRUIT_SIZE / 2;
+
+    // Special case for banana - use an elongated box along its curve
+    if (obj->type == BANANA)
+    {
+        // Use a wider but shorter box for banana due to its curved shape
+        float banana_box_width = FRUIT_SIZE * 1.6f;
+        float banana_box_height = FRUIT_SIZE * 0.8f;
+
+        // The banana's curve means we need to offset the box based on rotation
+        float box_offset_x = cos(obj->rotation) * FRUIT_SIZE * 0.2f;
+        float box_offset_y = sin(obj->rotation) * FRUIT_SIZE * 0.1f;
+
+        float box_left = center_x - banana_box_width / 2 + box_offset_x;
+        float box_top = center_y - banana_box_height / 2 + box_offset_y;
+
+        // Check if the slice point is within the banana's elongated box
+        if (slice_x >= box_left && slice_x <= box_left + banana_box_width &&
+            slice_y >= box_top && slice_y <= box_top + banana_box_height)
+        {
+            return 1; // Hit!
+        }
+    }
+    // Special case for orange - more spherical, so use a more accurate circle
+    else if (obj->type == ORANGE)
+    {
+        // Calculate distance from slice point to orange center
+        float dx = slice_x - center_x;
+        float dy = slice_y - center_y;
+        float distance_squared = dx * dx + dy * dy;
+
+        // Oranges should have a slightly larger hit radius than other fruits
+        float orange_radius = FRUIT_SIZE * 0.55f;
+
+        if (distance_squared < orange_radius * orange_radius)
+        {
+            return 1; // Hit!
+        }
+    }
+
+    // For other fruits, use the standard box collision first
+    // Box collision detection - using more generous box for banana and orange
+    float box_scale = (obj->type == BANANA || obj->type == ORANGE) ? 1.3f : 1.2f;
+    float box_left = obj->x - (FRUIT_SIZE * (box_scale - 1.0f) / 2);
+    float box_top = obj->y - (FRUIT_SIZE * (box_scale - 1.0f) / 2);
+    float box_width = FRUIT_SIZE * box_scale;
+    float box_height = FRUIT_SIZE * box_scale;
+
+    // Box collision check
+    if (slice_x >= box_left && slice_x <= box_left + box_width &&
+        slice_y >= box_top && slice_y <= box_top + box_height)
+    {
+        return 1; // Hit!
+    }
+
+    // If box collision failed, try circle collision as a backup
+    // This helps with curved shapes and other fruits
+
+    // Calculate distance from slice point to fruit center
+    float dx = slice_x - center_x;
+    float dy = slice_y - center_y;
+    float distance_squared = dx * dx + dy * dy;
+
+    // Very generous hit radius - almost the entire fruit area
+    float hit_radius;
+    switch (obj->type)
+    {
+    case APPLE:
+        hit_radius = FRUIT_SIZE * 0.6f;
+        break;
+    case ORANGE:
+        hit_radius = FRUIT_SIZE * 0.55f; // Changed from 0.65f to match orangeRadius defined elsewhere
+        break;
+    case BANANA:
+        hit_radius = FRUIT_SIZE * 0.75f; // Increased from 0.7f
+        break;
+    case BOMB:
+        hit_radius = FRUIT_SIZE * 0.5f;
+        break;
+    default:
+        hit_radius = FRUIT_SIZE * 0.6f;
+    }
+
+    // Check simple circle collision
+    if (distance_squared < hit_radius * hit_radius)
+    {
+        return 1; // Hit!
+    }
+
+    // For fast-moving fruits, create a velocity-based adjustment
+    // This helps with hitting fruits that might have moved between frames
+    float velocity_magnitude = sqrt(obj->vx * obj->vx + obj->vy * obj->vy);
+
+    // If the fruit is moving fast, increase the hit radius even more
+    if (velocity_magnitude > 5.0f)
+    {
+        // Increase hit radius based on velocity - more for banana and orange
+        float speed_bonus = (obj->type == BANANA || obj->type == ORANGE) ? 0.25f : 0.2f;
+        hit_radius += velocity_magnitude * speed_bonus;
+
+        // Also check slightly ahead of the fruit's position based on its direction
+        // This helps with hitting fruits that appear to be ahead of their hitbox
+        float vel_dx = slice_x - (center_x + obj->vx * 0.15f);
+        float vel_dy = slice_y - (center_y + obj->vy * 0.15f);
+        float vel_distance_squared = vel_dx * vel_dx + vel_dy * vel_dy;
+
+        // Return true if future position check succeeds
+        if (vel_distance_squared < hit_radius * hit_radius)
+        {
+            return 1;
+        }
+    }
+
+    // Return false as all tests failed
+    return 0;
+}
+
 // Handle SDL events
 void handleEvents()
 {
     SDL_Event e;
+    static int prev_prev_mouse_x = 0, prev_prev_mouse_y = 0; // Store previous-previous mouse position for better line detection
+
     while (SDL_PollEvent(&e))
     {
         if (e.type == SDL_QUIT)
@@ -713,34 +1080,52 @@ void handleEvents()
         }
         else if (e.type == SDL_MOUSEMOTION)
         {
+            prev_prev_mouse_x = prev_mouse_x;
+            prev_prev_mouse_y = prev_mouse_y;
             prev_mouse_x = mouse_x;
             prev_mouse_y = mouse_y;
             mouse_x = e.motion.x;
             mouse_y = e.motion.y;
 
-            // Check for slice based on mouse movement (no click required)
-            if (abs(mouse_x - prev_mouse_x) > 3 || abs(mouse_y - prev_mouse_y) > 3)
+            // Improve slice detection - check if mouse moved fast enough to count as a slice
+            float mouse_movement = sqrt(pow(mouse_x - prev_mouse_x, 2) + pow(mouse_y - prev_mouse_y, 2));
+
+            // Only count as a slice if the movement is significant
+            if (mouse_movement > 5)
             {
-                // Check slice along the path from prev to current
-                for (int t = 0; t < 10; t++)
+                pthread_mutex_lock(&game_mutex);
+
+                // Track which objects were sliced to avoid double-counting
+                int sliced_objects[MAX_FRUITS] = {0};
+
+                // First check if the line formed by mouse movement intersects any fruit
+                for (int i = 0; i < MAX_FRUITS; i++)
                 {
-                    float lerp = t / 10.0f;
-                    int slice_x = prev_mouse_x + (mouse_x - prev_mouse_x) * lerp;
-                    int slice_y = prev_mouse_y + (mouse_y - prev_mouse_y) * lerp;
-
-                    pthread_mutex_lock(&game_mutex);
-                    for (int i = 0; i < MAX_FRUITS; i++)
+                    if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
                     {
-                        if (gameObjects[i].active && !gameObjects[i].sliced)
-                        {
-                            // Simple collision detection
-                            float dx = slice_x - gameObjects[i].x - FRUIT_SIZE / 2;
-                            float dy = slice_y - gameObjects[i].y - FRUIT_SIZE / 2;
-                            float distance_squared = dx * dx + dy * dy;
+                        float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
+                        float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
 
-                            if (distance_squared < (FRUIT_SIZE / 2) * (FRUIT_SIZE / 2))
+                        // Use a generous radius for line intersection test - larger for bananas and oranges
+                        float hit_radius;
+                        if (gameObjects[i].type == BANANA)
+                        {
+                            // Bananas need a wider hit area due to their elongated shape
+                            hit_radius = FRUIT_SIZE * 0.8f;
+
+                            // For bananas, also check with an offset based on rotation to account for its curve
+                            float offset_x = cos(gameObjects[i].rotation) * FRUIT_SIZE * 0.2f;
+                            float offset_y = sin(gameObjects[i].rotation) * FRUIT_SIZE * 0.1f;
+
+                            // Check both the center and the offset points
+                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                    center_x + offset_x, center_y + offset_y, hit_radius) ||
+                                lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                    center_x, center_y, hit_radius))
                             {
+                                // Fruit hit by slice line!
                                 gameObjects[i].sliced = 1;
+                                sliced_objects[i] = 1;
 
                                 // Initialize slice pieces
                                 float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
@@ -748,8 +1133,85 @@ void handleEvents()
                                 // Create two pieces moving in different directions
                                 for (int j = 0; j < SLICE_PIECES; j++)
                                 {
-                                    gameObjects[i].pieces[j].x = gameObjects[i].x + FRUIT_SIZE / 2;
-                                    gameObjects[i].pieces[j].y = gameObjects[i].y + FRUIT_SIZE / 2;
+                                    gameObjects[i].pieces[j].x = center_x;
+                                    gameObjects[i].pieces[j].y = center_y;
+
+                                    // Different velocities for each piece
+                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+
+                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                }
+
+                                // Play slice sound
+                                Mix_PlayChannel(-1, sliceSound, 0);
+                                score += 1;
+                                printf("Banana sliced! Score: %d\n", score);
+                            }
+                        }
+                        else if (gameObjects[i].type == ORANGE)
+                        {
+                            // Oranges can have a larger radius since they're round
+                            hit_radius = FRUIT_SIZE * 0.55f; // Match exactly with orangeRadius in rendering (0.85f of halfSize = 0.55f of FRUIT_SIZE)
+
+                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                    center_x, center_y, hit_radius))
+                            {
+                                // Orange hit by slice line!
+                                gameObjects[i].sliced = 1;
+                                sliced_objects[i] = 1;
+
+                                // Initialize slice pieces
+                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+
+                                // Create two pieces moving in different directions
+                                for (int j = 0; j < SLICE_PIECES; j++)
+                                {
+                                    gameObjects[i].pieces[j].x = center_x;
+                                    gameObjects[i].pieces[j].y = center_y;
+
+                                    // Different velocities for each piece
+                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+
+                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                }
+
+                                // Play slice sound
+                                Mix_PlayChannel(-1, sliceSound, 0);
+                                score += 1;
+                                printf("Orange sliced! Score: %d\n", score);
+                            }
+                        }
+                        else
+                        {
+                            // For other fruit types and bombs
+                            hit_radius = FRUIT_SIZE * 0.7f;
+
+                            // Check current movement path
+                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                    center_x, center_y, hit_radius))
+                            {
+                                // Fruit hit by slice line!
+                                gameObjects[i].sliced = 1;
+                                sliced_objects[i] = 1;
+
+                                // Initialize slice pieces
+                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+
+                                // Create two pieces moving in different directions
+                                for (int j = 0; j < SLICE_PIECES; j++)
+                                {
+                                    gameObjects[i].pieces[j].x = center_x;
+                                    gameObjects[i].pieces[j].y = center_y;
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
@@ -779,8 +1241,133 @@ void handleEvents()
                             }
                         }
                     }
-                    pthread_mutex_unlock(&game_mutex);
                 }
+
+                // Also check slice along multiple points on the path for very precise slicing
+                int samples = 12; // Good balance of precision and performance
+
+                for (int t = 0; t <= samples; t++)
+                {
+                    float lerp = (float)t / samples;
+                    int slice_x = prev_mouse_x + (mouse_x - prev_mouse_x) * lerp;
+                    int slice_y = prev_mouse_y + (mouse_y - prev_mouse_y) * lerp;
+
+                    for (int i = 0; i < MAX_FRUITS; i++)
+                    {
+                        // Only process objects that haven't been sliced yet in this motion
+                        if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
+                        {
+                            // Use improved collision detection function
+                            if (checkCollision(slice_x, slice_y, &gameObjects[i]))
+                            {
+                                gameObjects[i].sliced = 1;
+                                sliced_objects[i] = 1;
+
+                                // Initialize slice pieces
+                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+                                float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
+                                float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
+
+                                // Create two pieces moving in different directions
+                                for (int j = 0; j < SLICE_PIECES; j++)
+                                {
+                                    gameObjects[i].pieces[j].x = center_x;
+                                    gameObjects[i].pieces[j].y = center_y;
+
+                                    // Different velocities for each piece
+                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+
+                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                }
+
+                                if (gameObjects[i].type == BOMB)
+                                {
+                                    // Play bomb sound
+                                    Mix_PlayChannel(-1, bombSound, 0);
+                                    score -= 10;
+                                    printf("Bomb sliced! Score: %d\n", score);
+                                }
+                                else
+                                {
+                                    // Play slice sound
+                                    Mix_PlayChannel(-1, sliceSound, 0);
+                                    score += 1;
+                                    printf("Fruit sliced! Score: %d\n", score);
+                                }
+
+                                // Don't break here - need to check remaining fruits
+                            }
+                        }
+                    }
+                }
+
+                // Also check the longer trail path (previous-previous to current)
+                // This helps catch objects in fast swipes
+                if (mouse_movement > 20) // Only for fast movements
+                {
+                    for (int i = 0; i < MAX_FRUITS; i++)
+                    {
+                        if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
+                        {
+                            float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
+                            float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
+
+                            // Use a generous radius for line intersection test
+                            float hit_radius = FRUIT_SIZE * 0.75f;
+
+                            // Check the longer path from previous-previous to current
+                            if (lineCircleIntersect(prev_prev_mouse_x, prev_prev_mouse_y, mouse_x, mouse_y,
+                                                    center_x, center_y, hit_radius))
+                            {
+                                // Fruit hit by extended slice line!
+                                gameObjects[i].sliced = 1;
+                                sliced_objects[i] = 1;
+
+                                // Initialize slice pieces
+                                float sliceAngle = atan2(mouse_y - prev_prev_mouse_y, mouse_x - prev_prev_mouse_x);
+
+                                // Create two pieces moving in different directions
+                                for (int j = 0; j < SLICE_PIECES; j++)
+                                {
+                                    gameObjects[i].pieces[j].x = center_x;
+                                    gameObjects[i].pieces[j].y = center_y;
+
+                                    // Different velocities for each piece
+                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+
+                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                }
+
+                                if (gameObjects[i].type == BOMB)
+                                {
+                                    // Play bomb sound
+                                    Mix_PlayChannel(-1, bombSound, 0);
+                                    score -= 10;
+                                    printf("Bomb sliced! Score: %d\n", score);
+                                }
+                                else
+                                {
+                                    // Play slice sound
+                                    Mix_PlayChannel(-1, sliceSound, 0);
+                                    score += 1;
+                                    printf("Fruit sliced! Score: %d\n", score);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                pthread_mutex_unlock(&game_mutex);
 
                 // Set mouse_down to true for rendering the slice trail
                 mouse_down = 1;
@@ -1001,52 +1588,102 @@ void renderGame()
     if (mouse_down && (prev_mouse_x != mouse_x || prev_mouse_y != mouse_y))
     {
         // Create dynamic slice trail
-        static float trailOpacity[10] = {0}; // Opacity values for trailing segments
-        static int trailX[10] = {0};         // X positions for trail segments
-        static int trailY[10] = {0};         // Y positions for trail segments
+        static float trailOpacity[15] = {0}; // Increased from 10 to 15 for longer trail
+        static int trailX[15] = {0};         // X positions for trail segments
+        static int trailY[15] = {0};         // Y positions for trail segments
+        static float trailWidth[15] = {0};   // Width of each trail segment
 
         // Shift trail values
-        for (int i = 9; i > 0; i--)
+        for (int i = 14; i > 0; i--)
         {
             trailX[i] = trailX[i - 1];
             trailY[i] = trailY[i - 1];
-            trailOpacity[i] = trailOpacity[i - 1] * 0.8f; // Fade out
+            trailOpacity[i] = trailOpacity[i - 1] * 0.85f; // Slower fade out (was 0.8f)
+            trailWidth[i] = trailWidth[i - 1] * 0.9f;      // Gradual thinning
         }
 
         // Add new point to trail
         trailX[0] = mouse_x;
         trailY[0] = mouse_y;
-        trailOpacity[0] = 0.9f;
+        trailOpacity[0] = 1.0f; // Full opacity at start (was 0.9f)
 
-        // Draw trail with gradient
-        for (int i = 1; i < 10; i++)
+        // Calculate trail width based on mouse movement speed
+        float movement = sqrt(pow(mouse_x - prev_mouse_x, 2) + pow(mouse_y - prev_mouse_y, 2));
+        trailWidth[0] = fmin(3.5f, 1.5f + movement * 0.05f); // Thinner trail: was 6.0f max, now 3.5f max
+
+        // Draw trail with improved gradient
+        for (int i = 1; i < 15; i++)
         {
             if (trailOpacity[i] > 0.05f)
             {
                 int alpha = (int)(trailOpacity[i] * 255);
-                int thickness = 3 - i / 3;
-                if (thickness < 1)
-                    thickness = 1;
+                float thickness = trailWidth[i];
+                if (thickness < 0.5f)
+                    thickness = 0.5f;
 
-                // White core with blue outer glow
+                // Bright core
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
                 SDL_RenderDrawLine(renderer, trailX[i - 1], trailY[i - 1], trailX[i], trailY[i]);
 
-                // Thicker colored trail
-                for (int t = 1; t <= thickness; t++)
+                // Thinner colored trail with better rainbow effect
+                for (int t = 1; t <= (int)(thickness * 1.5); t++) // Reduced multiplier from 2 to 1.5
                 {
-                    // Different colors for a rainbow effect
-                    SDL_SetRenderDrawColor(renderer,
-                                           100 + (i * 15),
-                                           150 + ((i + 3) % 10) * 10,
-                                           255,
-                                           alpha / (t + 1));
+                    float tFactor = t / thickness;
+
+                    // Vibrant sword-like colors
+                    Uint8 r, g, b;
+                    // Calculate hue based on position in trail and current time for animation
+                    float hue = (i * 20 + SDL_GetTicks() / 10) % 360;
+
+                    // Simple HSV to RGB conversion for vibrant colors
+                    if (hue < 60)
+                    {
+                        r = 255;
+                        g = (Uint8)(hue * 4.25);
+                        b = 0;
+                    }
+                    else if (hue < 120)
+                    {
+                        r = (Uint8)((120 - hue) * 4.25);
+                        g = 255;
+                        b = 0;
+                    }
+                    else if (hue < 180)
+                    {
+                        r = 0;
+                        g = 255;
+                        b = (Uint8)((hue - 120) * 4.25);
+                    }
+                    else if (hue < 240)
+                    {
+                        r = 0;
+                        g = (Uint8)((240 - hue) * 4.25);
+                        b = 255;
+                    }
+                    else if (hue < 300)
+                    {
+                        r = (Uint8)((hue - 240) * 4.25);
+                        g = 0;
+                        b = 255;
+                    }
+                    else
+                    {
+                        r = 255;
+                        g = 0;
+                        b = (Uint8)((360 - hue) * 4.25);
+                    }
+
+                    // Adjust alpha based on distance from center of trail
+                    int edgeAlpha = (int)(alpha / (tFactor + 1));
+
+                    SDL_SetRenderDrawColor(renderer, r, g, b, edgeAlpha);
 
                     // Draw parallel lines to create thickness
                     float angle = atan2(trailY[i] - trailY[i - 1], trailX[i] - trailX[i - 1]) + M_PI / 2;
+                    float distance = t * 0.5f; // Reduced from 0.7f to 0.5f for thinner trail
 
-                    int offsetX = (int)(cos(angle) * t);
-                    int offsetY = (int)(sin(angle) * t);
+                    int offsetX = (int)(cos(angle) * distance);
+                    int offsetY = (int)(sin(angle) * distance);
 
                     SDL_RenderDrawLine(renderer,
                                        trailX[i - 1] + offsetX, trailY[i - 1] + offsetY,
@@ -1057,16 +1694,21 @@ void renderGame()
                                        trailX[i] - offsetX, trailY[i] - offsetY);
                 }
 
-                // Add sparkle effects at intervals
-                if (i % 3 == 0)
+                // Add smaller sparkle effects
+                if (i % 3 == 0) // Less frequent sparkles (was i % 2)
                 {
-                    int sparkleSize = 3 - i / 4;
+                    int sparkleSize = 2 - i / 7; // Smaller sparkles (was 4 - i/5)
                     if (sparkleSize > 0)
                     {
+                        // Brighter sparkle color
                         SDL_SetRenderDrawColor(renderer, 255, 255, 220, alpha);
-                        SDL_Rect sparkle = {trailX[i] - sparkleSize / 2, trailY[i] - sparkleSize / 2,
-                                            sparkleSize, sparkleSize};
-                        SDL_RenderFillRect(renderer, &sparkle);
+
+                        // Draw as a filled circle instead of a rectangle for better appearance
+                        filledCircleRGBA(renderer,
+                                         trailX[i],
+                                         trailY[i],
+                                         sparkleSize,
+                                         255, 255, 220, alpha);
                     }
                 }
             }
