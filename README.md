@@ -75,23 +75,70 @@ The game features progressive difficulty, with increasing speed and frequency of
 ## Technical Implementation
 
 ### OS Concepts Demonstrated
-
 1. **Threading**
+
+```bash
+pthread_t spawnerThread;
+pthread_create(&spawnerThread, NULL, spawnObjects, NULL);
+```
 
    - A separate thread handles fruit spawning (pthread_create)
    - Thread synchronization with mutex locks (pthread_mutex_lock/unlock)
 
 2. **Process Creation**
+```bash
+void processSpawner()
+{
+    pid_t pid = fork();
+
+    if (pid == -1)
+    {
+        perror("Fork failed");
+        exit(EXIT_FAILURE);
+    }
+```
 
    - Fork() to create a child process for power-ups
    - Wait() for child process termination
 
 3. **Inter-Process Communication**
+```bash
+int pipefd[2];
+pipe(pipefd);
+
+pid_t pid = fork();
+if (pid == 0) {
+    // Child process
+    close(pipefd[0]); // Close unused read end
+    write(pipefd[1], "powerup", 7);
+    close(pipefd[1]);
+    exit(0);
+} else {
+    // Parent process
+    close(pipefd[1]); // Close unused write end
+    char buffer[128];
+    read(pipefd[0], buffer, sizeof(buffer));
+    close(pipefd[0]);
+```
 
    - Pipe for communication between parent and child processes
    - Non-blocking I/O for pipe reading
 
 4. **Signal Handling**
+```bash
+// Signal handler for clean exit
+void signalHandler(int sig)
+{
+    // Avoid unused parameter warning
+    (void)sig;
+
+    printf("\nGame ending. Final score: %d\n", score);
+    running = 0;
+    saveScore();
+    cleanupGame();
+    exit(0);
+}
+```
 
    - SIGINT handler for clean termination
    - File I/O for high score persistence
