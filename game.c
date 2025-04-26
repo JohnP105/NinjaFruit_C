@@ -1886,12 +1886,12 @@ void renderGame()
 
     // Main score box
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect scoreRect = {10, 10, 120, 40};
+    SDL_Rect scoreRect = {10, 10, 140, 40}; // Increased width from 120 to 140
     SDL_RenderFillRect(renderer, &scoreRect);
 
     // Border for score box
-    SDL_SetRenderDrawColor(renderer, 100, 100, 200, 255);
-    SDL_Rect scoreBorder = {10, 10, 120, 40};
+    SDL_SetRenderDrawColor(renderer, 200, 150, 100, 255); // Changed color from blue to amber
+    SDL_Rect scoreBorder = {10, 10, 140, 40};             // Increased width from 120 to 140
     SDL_RenderDrawRect(renderer, &scoreBorder);
 
     // Draw score text
@@ -1904,9 +1904,16 @@ void renderGame()
     // Display score number (simplistic digital-style)
     char scoreStr[20];
     sprintf(scoreStr, "%d", score);
-    int digitWidth = 12;
-    int digitX = 75;
-    int digitY = 22;
+    int digitWidth = 10; // Reduced from 12 to 10
+
+    // Calculate position to center score in its box
+    int scoreDigits = strlen(scoreStr);
+    int totalScoreWidth = scoreDigits * digitWidth + (scoreDigits - 1) * 2; // Width plus spacing
+    int digitX = scoreRect.x + (scoreRect.w - totalScoreWidth) / 2;
+    int digitY = scoreRect.y + (scoreRect.h - 18) / 2; // Center vertically (18 is digit height)
+
+    // Set drawing color back to white for the score display
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
     // Display score as a digital-style number
     for (int i = 0; scoreStr[i] != '\0'; i++)
@@ -1982,12 +1989,12 @@ void renderGame()
 
     // Timer background
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 60, 10, 120, 40}; // Increased width from 100 to 120
     SDL_RenderFillRect(renderer, &timerRect);
 
     // Timer border
     SDL_SetRenderDrawColor(renderer, 100, 200, 100, 255);
-    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 60, 10, 120, 40}; // Increased width from 100 to 120
     SDL_RenderDrawRect(renderer, &timerBorder);
 
     // Display timer as MM:SS
@@ -1996,11 +2003,16 @@ void renderGame()
 
     // Improved timer rendering with better digital display
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    int timeX = WINDOW_WIDTH / 2 - 30;
-    int timeY = 22;
-    int timerDigitWidth = 10; // Renamed from digitWidth to avoid redefinition
+
+    // Calculate position to center timer text
+    int timerDigitWidth = 8; // Reduced size from 10 to 8
     int digitHeight = 16;
     int segmentThickness = 2;
+
+    // Calculate width of timer text (5 characters plus spacing)
+    int timerTextWidth = 5 * timerDigitWidth + 4 * 2; // 5 chars (MM:SS) with 2px spacing between each
+    int timeX = WINDOW_WIDTH / 2 - timerTextWidth / 2;
+    int timeY = timerRect.y + (timerRect.h - digitHeight) / 2; // Center vertically
 
     // Draw each character in the time string with improved digital segments
     for (int i = 0; timeStr[i] != '\0'; i++)
@@ -2306,13 +2318,17 @@ void renderGame()
         // Game Over Text with digital display
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
-        // Draw "GAME OVER" text
-        drawDigitalText(renderer, "GAME OVER", WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 70, 20, 30, 4);
+        // Draw "GAME OVER" text centered
+        int gameOverWidth = strlen("GAME OVER") * 18 + (strlen("GAME OVER") - 1) * 3;
+        int gameOverX = WINDOW_WIDTH / 2 - gameOverWidth / 2;
+        drawDigitalText(renderer, "GAME OVER", gameOverX, WINDOW_HEIGHT / 2 - 70, 18, 28, 3);
 
-        // Draw final score with digital display
+        // Draw final score with digital display centered
         char scoreStr[20];
         sprintf(scoreStr, "SCORE %d", score);
-        drawDigitalText(renderer, scoreStr, WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 20, 16, 24, 4);
+        int scoreTextWidth = strlen(scoreStr) * 14 + (strlen(scoreStr) - 1) * 3;
+        int scoreTextX = WINDOW_WIDTH / 2 - scoreTextWidth / 2;
+        drawDigitalText(renderer, scoreStr, scoreTextX, WINDOW_HEIGHT / 2 - 20, 14, 22, 3);
 
         // Render "Restart" button
         SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
@@ -2322,8 +2338,11 @@ void renderGame()
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &restartButton);
 
-        // Draw "RESTART" text with digital display
-        drawDigitalText(renderer, "RESTART", restartButton.x + 10, restartButton.y + 10, 10, 20, 2);
+        // Draw "RESTART" text centered in button
+        int restartWidth = strlen("RESTART") * 10 + (strlen("RESTART") - 1) * 2;
+        int restartX = restartButton.x + (restartButton.w - restartWidth) / 2;
+        int restartY = restartButton.y + (restartButton.h - 20) / 2;
+        drawDigitalText(renderer, "RESTART", restartX, restartY, 10, 20, 2);
 
         // Render "Leaderboard" button
         SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
@@ -2333,8 +2352,11 @@ void renderGame()
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &leaderboardButton);
 
-        // Draw "SCORES" text with digital display
-        drawDigitalText(renderer, "SCORES", leaderboardButton.x + 15, leaderboardButton.y + 10, 10, 20, 2);
+        // Draw "SCORES" text centered in button
+        int scoresWidth = strlen("SCORES") * 10 + (strlen("SCORES") - 1) * 2;
+        int scoresX = leaderboardButton.x + (leaderboardButton.w - scoresWidth) / 2;
+        int scoresY = leaderboardButton.y + (leaderboardButton.h - 20) / 2;
+        drawDigitalText(renderer, "SCORES", scoresX, scoresY, 10, 20, 2);
     }
     // Display leaderboard
     else if (game_state == STATE_LEADERBOARD)
@@ -2346,7 +2368,7 @@ void renderGame()
 
         // Leaderboard box
         SDL_SetRenderDrawColor(renderer, 50, 50, 70, 240);
-        SDL_Rect leaderboardBox = {WINDOW_WIDTH / 2 - 200, 50, 400, WINDOW_HEIGHT - 150};
+        SDL_Rect leaderboardBox = {WINDOW_WIDTH / 2 - 220, 50, 440, WINDOW_HEIGHT - 150}; // Increased width from 400 to 440
         SDL_RenderFillRect(renderer, &leaderboardBox);
 
         // Box border
@@ -2355,29 +2377,38 @@ void renderGame()
 
         // Draw "LEADERBOARD" title with digital display
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        drawDigitalText(renderer, "LEADERBOARD", WINDOW_WIDTH / 2 - 120, 70, 18, 30, 3);
+
+        // Center the "LEADERBOARD" title
+        int titleWidth = strlen("LEADERBOARD") * 16 + (strlen("LEADERBOARD") - 1) * 3; // Character width * count + spacing
+        int titleX = WINDOW_WIDTH / 2 - titleWidth / 2;
+        drawDigitalText(renderer, "LEADERBOARD", titleX, 70, 16, 28, 3); // Centered
 
         // Display each score entry with digital display
-        for (int i = 0; i < num_scores; i++)
+        int maxDisplayScores = 9; // Changed from 10 to 9
+        for (int i = 0; i < num_scores && i < maxDisplayScores; i++)
         {
             int y = 130 + i * 40;
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
-            // Rank
+            // Calculate the width of a row to center contents
+            char fullRowText[50];
+            sprintf(fullRowText, "%d.  %d  %s", i + 1, leaderboard[i].score, leaderboard[i].date);
+
+            // Rank - left aligned with padding from left edge
             char rankStr[5];
             sprintf(rankStr, "%d.", i + 1);
-            drawDigitalText(renderer, rankStr, WINDOW_WIDTH / 2 - 180, y, 14, 24, 3);
+            drawDigitalText(renderer, rankStr, leaderboardBox.x + 30, y, 12, 22, 3);
 
-            // Score
+            // Score - centered in the middle section
             char scoreStr[20];
             sprintf(scoreStr, "%d", leaderboard[i].score);
-            drawDigitalText(renderer, scoreStr, WINDOW_WIDTH / 2 - 140, y, 14, 24, 3);
+            drawDigitalText(renderer, scoreStr, WINDOW_WIDTH / 2 - (strlen(scoreStr) * 12) / 2, y, 12, 22, 3);
 
-            // Date (shortened to just show essential info)
+            // Date (shortened to just show essential info) - right aligned with padding
             char dateShort[15];
             strncpy(dateShort, leaderboard[i].date, 10); // Just show the date part
             dateShort[10] = '\0';
-            drawDigitalText(renderer, dateShort, WINDOW_WIDTH / 2 + 0, y, 10, 20, 2);
+            drawDigitalText(renderer, dateShort, leaderboardBox.x + leaderboardBox.w - 30 - (strlen(dateShort) * 8), y, 8, 18, 2);
         }
 
         // Back button
@@ -2388,8 +2419,11 @@ void renderGame()
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &backButton);
 
-        // Draw "BACK" text with digital display
-        drawDigitalText(renderer, "BACK", backButton.x + 20, backButton.y + 10, 12, 20, 2);
+        // Draw "BACK" text centered in button
+        int backWidth = strlen("BACK") * 12 + (strlen("BACK") - 1) * 2;
+        int backX = backButton.x + (backButton.w - backWidth) / 2;
+        int backY = backButton.y + (backButton.h - 20) / 2;
+        drawDigitalText(renderer, "BACK", backX, backY, 12, 20, 2);
     }
 
     // Present rendered frame

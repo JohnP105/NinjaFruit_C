@@ -24,7 +24,7 @@
 #define FRUIT_TYPES 3 // Apple, Banana, Orange
 #define BOMB_CHANCE 5 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
-#define MAX_SCORES 10 // Maximum number of high scores to track
+#define MAX_SCORES 9 // Maximum number of high scores to track
 
 // Game states
 typedef enum
