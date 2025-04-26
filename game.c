@@ -18,8 +18,8 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define MAX_FRUITS 20
-#define FRUIT_TYPES 3  // Apple, Banana, Orange
-#define BOMB_CHANCE 30 // 1 in 10 chance of spawning a bomb
+#define FRUIT_TYPES 3 // Apple, Banana, Orange
+#define BOMB_CHANCE 5 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
 
 // Slicing animation constants
@@ -1567,105 +1567,178 @@ void renderGame()
     SDL_RenderCopy(renderer, background_texture, NULL, NULL);
 
     // ===== Draw Score Panel =====
-    // Create a nice-looking score panel in top-left
-    for (int i = 0; i < 40; i++)
+    // Create a nice-looking score panel in top-left with a glow effect
+    SDL_SetRenderDrawColor(renderer, 20, 20, 40, 200);
+    SDL_Rect scoreRect = {10, 10, 140, 50}; // Made wider and taller
+    SDL_RenderFillRect(renderer, &scoreRect);
+
+    // Add a gradient background with better depth
+    for (int i = 0; i < 50; i++)
     {
         int alpha = 180 - i * 3;
         if (alpha < 0)
             alpha = 0;
-        SDL_SetRenderDrawColor(renderer, 30, 30, 60, alpha);
-        SDL_Rect scoreGradient = {10, 10 + i, 120, 1};
+        SDL_SetRenderDrawColor(renderer, 15, 15, 40, alpha);
+        SDL_Rect scoreGradient = {10, 10 + i, 140, 1};
         SDL_RenderFillRect(renderer, &scoreGradient);
     }
 
-    // Main score box
-    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect scoreRect = {10, 10, 120, 40};
-    SDL_RenderFillRect(renderer, &scoreRect);
+    // Double border for score box with better glow
+    SDL_SetRenderDrawColor(renderer, 60, 60, 220, 120);
+    SDL_Rect scoreBorderOuter2 = {7, 7, 146, 56};
+    SDL_RenderDrawRect(renderer, &scoreBorderOuter2);
 
-    // Border for score box
-    SDL_SetRenderDrawColor(renderer, 100, 100, 200, 255);
-    SDL_Rect scoreBorder = {10, 10, 120, 40};
+    SDL_SetRenderDrawColor(renderer, 80, 80, 220, 255);
+    SDL_Rect scoreBorderOuter = {9, 9, 142, 52};
+    SDL_RenderDrawRect(renderer, &scoreBorderOuter);
+
+    // Inner border with accent color
+    SDL_SetRenderDrawColor(renderer, 140, 140, 255, 255);
+    SDL_Rect scoreBorder = {10, 10, 140, 50};
     SDL_RenderDrawRect(renderer, &scoreBorder);
 
-    // Draw score text
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    // Draw "SCORE" label with better stylized text
+    SDL_SetRenderDrawColor(renderer, 220, 220, 255, 255);
+    int scoreLabel_X = 25;
+    int scoreLabel_Y = 18;
 
-    // Draw "SCORE:" label
-    int scoreTextX = 20;
-    int scoreTextY = 20;
+    // Draw the "SCORE:" text with thicker lines for better visibility
+    // 'S'
+    for (int t = 0; t < 2; t++)
+    {
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t, scoreLabel_Y + 5);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 5, scoreLabel_X + t + 8, scoreLabel_Y + 5);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t + 8, scoreLabel_Y + 5, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 10, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+    }
 
-    // Display score number (simplistic digital-style)
+    // 'C'
+    scoreLabel_X += 12;
+    for (int t = 0; t < 2; t++)
+    {
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 10, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+    }
+
+    // 'O'
+    scoreLabel_X += 12;
+    for (int t = 0; t < 2; t++)
+    {
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 10, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t + 8, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+    }
+
+    // 'R'
+    scoreLabel_X += 12;
+    for (int t = 0; t < 2; t++)
+    {
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t + 8, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y + 5);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 5, scoreLabel_X + t + 8, scoreLabel_Y + 5);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 5, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+    }
+
+    // 'E'
+    scoreLabel_X += 12;
+    for (int t = 0; t < 2; t++)
+    {
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t + 8, scoreLabel_Y);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y, scoreLabel_X + t, scoreLabel_Y + 10);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 5, scoreLabel_X + t + 6, scoreLabel_Y + 5);
+        SDL_RenderDrawLine(renderer, scoreLabel_X + t, scoreLabel_Y + 10, scoreLabel_X + t + 8, scoreLabel_Y + 10);
+    }
+
+    // Display score number with enhanced digital-style
     char scoreStr[20];
     sprintf(scoreStr, "%d", score);
-    int digitWidth = 12;
-    int digitX = 75;
-    int digitY = 22;
+    int score_digitWidth = 14;  // Slightly wider than timer digits
+    int score_digitHeight = 20; // Slightly taller than timer digits
+    int score_digitX = 50;
+    int score_digitY = 34;
+    int score_segmentThickness = 3; // Thicker segments for better visibility
 
-    // Display score as a digital-style number
+    // Display score as a digital-style number with improved glow
     for (int i = 0; scoreStr[i] != '\0'; i++)
     {
         int digit = scoreStr[i] - '0';
+        int x = score_digitX + i * (score_digitWidth + 4);
+        int y = score_digitY;
 
-        // Simple digital rendering - rectangles for each segment
-        // Adjust positioning based on digit
-        SDL_Rect segments[7]; // 7 segments in a digital display
-
-        // Initialize segments to off position
-        for (int s = 0; s < 7; s++)
-        {
-            segments[s].x = digitX + i * digitWidth;
-            segments[s].y = digitY;
-            segments[s].w = 8;
-            segments[s].h = 2;
-        }
-
-        // Horizontal segments
-        segments[0].y = digitY;      // Top
-        segments[3].y = digitY + 8;  // Middle
-        segments[6].y = digitY + 16; // Bottom
-
-        // Vertical segments
-        segments[1].x = digitX + i * digitWidth + 8; // Top right
-        segments[1].y = digitY;
-        segments[1].w = 2;
-        segments[1].h = 8;
-
-        segments[2].x = digitX + i * digitWidth + 8; // Bottom right
-        segments[2].y = digitY + 8;
-        segments[2].w = 2;
-        segments[2].h = 8;
-
-        segments[4].x = digitX + i * digitWidth; // Top left
-        segments[4].y = digitY;
-        segments[4].w = 2;
-        segments[4].h = 8;
-
-        segments[5].x = digitX + i * digitWidth; // Bottom left
-        segments[5].y = digitY + 8;
-        segments[5].w = 2;
-        segments[5].h = 8;
-
-        // Define which segments are on for each digit
-        bool segmentOn[10][7] = {
-            {1, 1, 1, 0, 1, 1, 1}, // 0
+        // Arrays to define which segments are on for each digit (7-segment display)
+        // Segments: 0=top, 1=top-right, 2=bottom-right, 3=bottom, 4=bottom-left, 5=top-left, 6=middle
+        bool segments[10][7] = {
+            {1, 1, 1, 1, 1, 1, 0}, // 0
             {0, 1, 1, 0, 0, 0, 0}, // 1
-            {1, 1, 0, 1, 0, 1, 1}, // 2
+            {1, 1, 0, 1, 1, 0, 1}, // 2
             {1, 1, 1, 1, 0, 0, 1}, // 3
-            {0, 1, 1, 1, 1, 0, 0}, // 4
-            {1, 0, 1, 1, 1, 0, 1}, // 5
+            {0, 1, 1, 0, 0, 1, 1}, // 4
+            {1, 0, 1, 1, 0, 1, 1}, // 5
             {1, 0, 1, 1, 1, 1, 1}, // 6
             {1, 1, 1, 0, 0, 0, 0}, // 7
             {1, 1, 1, 1, 1, 1, 1}, // 8
-            {1, 1, 1, 1, 1, 0, 1}  // 9
+            {1, 1, 1, 1, 0, 1, 1}  // 9
         };
 
-        // Render the active segments for this digit
+        // Define coordinates for each segment
+        SDL_Rect segs[7];
+
+        // Horizontal segments (top, middle, bottom)
+        segs[0] = (SDL_Rect){x, y, score_digitWidth, score_segmentThickness};                                              // Top
+        segs[6] = (SDL_Rect){x, y + score_digitHeight / 2, score_digitWidth, score_segmentThickness};                      // Middle
+        segs[3] = (SDL_Rect){x, y + score_digitHeight - score_segmentThickness, score_digitWidth, score_segmentThickness}; // Bottom
+
+        // Vertical segments (top-right, bottom-right, bottom-left, top-left)
+        segs[1] = (SDL_Rect){x + score_digitWidth - score_segmentThickness, y, score_segmentThickness, score_digitHeight / 2};                         // Top-right
+        segs[2] = (SDL_Rect){x + score_digitWidth - score_segmentThickness, y + score_digitHeight / 2, score_segmentThickness, score_digitHeight / 2}; // Bottom-right
+        segs[4] = (SDL_Rect){x, y + score_digitHeight / 2, score_segmentThickness, score_digitHeight / 2};                                             // Bottom-left
+        segs[5] = (SDL_Rect){x, y, score_segmentThickness, score_digitHeight / 2};                                                                     // Top-left
+
+        // Draw the active segments for this digit with a nice blue glow
         for (int s = 0; s < 7; s++)
         {
-            if (segmentOn[digit][s])
+            if (segments[digit][s])
             {
-                SDL_RenderFillRect(renderer, &segments[s]);
+                // Draw outer glow effect (larger, semi-transparent)
+                SDL_SetRenderDrawColor(renderer, 60, 60, 220, 60);
+                SDL_Rect outerGlowRect = segs[s];
+                outerGlowRect.x -= 2;
+                outerGlowRect.y -= 2;
+                outerGlowRect.w += 4;
+                outerGlowRect.h += 4;
+                SDL_RenderFillRect(renderer, &outerGlowRect);
+
+                // Draw medium glow effect
+                SDL_SetRenderDrawColor(renderer, 80, 80, 240, 100);
+                SDL_Rect glowRect = segs[s];
+                glowRect.x -= 1;
+                glowRect.y -= 1;
+                glowRect.w += 2;
+                glowRect.h += 2;
+                SDL_RenderFillRect(renderer, &glowRect);
+
+                // Draw main segment with a brighter color
+                SDL_SetRenderDrawColor(renderer, 180, 180, 255, 255);
+                SDL_RenderFillRect(renderer, &segs[s]);
+
+                // Draw inner highlight for 3D effect
+                SDL_SetRenderDrawColor(renderer, 240, 240, 255, 255);
+                if (s == 0 || s == 3 || s == 6)
+                { // Horizontal segments
+                    SDL_Rect highlightRect = segs[s];
+                    highlightRect.h -= 1;
+                    SDL_RenderFillRect(renderer, &highlightRect);
+                }
+                else
+                { // Vertical segments
+                    SDL_Rect highlightRect = segs[s];
+                    highlightRect.w -= 1;
+                    SDL_RenderFillRect(renderer, &highlightRect);
+                }
             }
         }
     }
@@ -1674,15 +1747,61 @@ void renderGame()
     int minutes = game_time / 60;
     int seconds = game_time % 60;
 
-    // Timer background
+    // Timer background with gradient effect
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 60, 10, 120, 50};
     SDL_RenderFillRect(renderer, &timerRect);
 
-    // Timer border
-    SDL_SetRenderDrawColor(renderer, 100, 200, 100, 255);
-    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 50, 10, 100, 40};
+    // Add gradient to timer
+    for (int i = 0; i < 50; i++)
+    {
+        int alpha = 160 - i * 3;
+        if (alpha < 0)
+            alpha = 0;
+        SDL_SetRenderDrawColor(renderer, 20, 20, 40, alpha);
+        SDL_Rect timerGradient = {WINDOW_WIDTH / 2 - 60, 10 + i, 120, 1};
+        SDL_RenderFillRect(renderer, &timerGradient);
+    }
+
+    // Double border for timer - outer
+    SDL_SetRenderDrawColor(renderer, 80, 200, 80, 255);
+    SDL_Rect timerBorderOuter = {WINDOW_WIDTH / 2 - 61, 9, 122, 52};
+    SDL_RenderDrawRect(renderer, &timerBorderOuter);
+
+    // Inner border with accent color
+    SDL_SetRenderDrawColor(renderer, 100, 255, 100, 255);
+    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 60, 10, 120, 50};
     SDL_RenderDrawRect(renderer, &timerBorder);
+
+    // Draw "TIME" label with stylized text
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    int timeLabel_X = WINDOW_WIDTH / 2 - 35;
+    int timeLabel_Y = 18;
+
+    // Draw the "TIME" text with custom simple vector graphics
+    // 'T'
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X + 8, timeLabel_Y);
+    SDL_RenderDrawLine(renderer, timeLabel_X + 4, timeLabel_Y, timeLabel_X + 4, timeLabel_Y + 10);
+
+    // 'I'
+    timeLabel_X += 12;
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X + 4, timeLabel_Y);
+    SDL_RenderDrawLine(renderer, timeLabel_X + 2, timeLabel_Y, timeLabel_X + 2, timeLabel_Y + 10);
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y + 10, timeLabel_X + 4, timeLabel_Y + 10);
+
+    // 'M'
+    timeLabel_X += 8;
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X, timeLabel_Y + 10);
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X + 4, timeLabel_Y + 5);
+    SDL_RenderDrawLine(renderer, timeLabel_X + 4, timeLabel_Y + 5, timeLabel_X + 8, timeLabel_Y);
+    SDL_RenderDrawLine(renderer, timeLabel_X + 8, timeLabel_Y, timeLabel_X + 8, timeLabel_Y + 10);
+
+    // 'E'
+    timeLabel_X += 12;
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X + 8, timeLabel_Y);
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y, timeLabel_X, timeLabel_Y + 10);
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y + 5, timeLabel_X + 6, timeLabel_Y + 5);
+    SDL_RenderDrawLine(renderer, timeLabel_X, timeLabel_Y + 10, timeLabel_X + 8, timeLabel_Y + 10);
 
     // Display timer as MM:SS
     char timeStr[10];
@@ -1690,20 +1809,28 @@ void renderGame()
 
     // Improved timer rendering with better digital display
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    int timeX = WINDOW_WIDTH / 2 - 30;
-    int timeY = 22;
-    int timerDigitWidth = 10; // Renamed from digitWidth to avoid redefinition
-    int digitHeight = 16;
-    int segmentThickness = 2;
+    int time_X = WINDOW_WIDTH / 2 - 35;
+    int time_Y = 34;
+    int time_digitWidth = 12;
+    int time_digitHeight = 20;
+    int time_segmentThickness = 2;
 
     // Draw each character in the time string with improved digital segments
     for (int i = 0; timeStr[i] != '\0'; i++)
     {
         if (timeStr[i] == ':')
         {
-            // Draw colon with larger dots
-            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + 2), timeY + 4, 3, 3};
-            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + 2), timeY + 10, 3, 3};
+            // Draw colon with larger dots and glow effect
+            SDL_SetRenderDrawColor(renderer, 80, 200, 80, 100);
+            SDL_Rect colonGlow1 = {time_X + i * (time_digitWidth + 2) - 1, time_Y + 5, 5, 5};
+            SDL_Rect colonGlow2 = {time_X + i * (time_digitWidth + 2) - 1, time_Y + 11, 5, 5};
+            SDL_RenderFillRect(renderer, &colonGlow1);
+            SDL_RenderFillRect(renderer, &colonGlow2);
+
+            // Draw main colon dots
+            SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255);
+            SDL_Rect colon1 = {time_X + i * (time_digitWidth + 2), time_Y + 6, 3, 3};
+            SDL_Rect colon2 = {time_X + i * (time_digitWidth + 2), time_Y + 12, 3, 3};
             SDL_RenderFillRect(renderer, &colon1);
             SDL_RenderFillRect(renderer, &colon2);
         }
@@ -1711,8 +1838,8 @@ void renderGame()
         {
             // Convert character to digit
             int digit = timeStr[i] - '0';
-            int x = timeX + i * (timerDigitWidth + 2);
-            int y = timeY;
+            int x = time_X + i * (time_digitWidth + 4);
+            int y = time_Y;
 
             // Arrays to define which segments are on for each digit (7-segment display)
             // Segments: 0=top, 1=top-right, 2=bottom-right, 3=bottom, 4=bottom-left, 5=top-left, 6=middle
@@ -1733,21 +1860,32 @@ void renderGame()
             SDL_Rect segs[7];
 
             // Horizontal segments (top, middle, bottom)
-            segs[0] = (SDL_Rect){x, y, timerDigitWidth, segmentThickness};                                  // Top
-            segs[6] = (SDL_Rect){x, y + digitHeight / 2, timerDigitWidth, segmentThickness};                // Middle
-            segs[3] = (SDL_Rect){x, y + digitHeight - segmentThickness, timerDigitWidth, segmentThickness}; // Bottom
+            segs[0] = (SDL_Rect){x, y, time_digitWidth, time_segmentThickness};                                            // Top
+            segs[6] = (SDL_Rect){x, y + time_digitHeight / 2, time_digitWidth, time_segmentThickness};                     // Middle
+            segs[3] = (SDL_Rect){x, y + time_digitHeight - time_segmentThickness, time_digitWidth, time_segmentThickness}; // Bottom
 
             // Vertical segments (top-right, bottom-right, bottom-left, top-left)
-            segs[1] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y, segmentThickness, digitHeight / 2};                   // Top-right
-            segs[2] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y + digitHeight / 2, segmentThickness, digitHeight / 2}; // Bottom-right
-            segs[4] = (SDL_Rect){x, y + digitHeight / 2, segmentThickness, digitHeight / 2};                                      // Bottom-left
-            segs[5] = (SDL_Rect){x, y, segmentThickness, digitHeight / 2};                                                        // Top-left
+            segs[1] = (SDL_Rect){x + time_digitWidth - time_segmentThickness, y, time_segmentThickness, time_digitHeight / 2};                        // Top-right
+            segs[2] = (SDL_Rect){x + time_digitWidth - time_segmentThickness, y + time_digitHeight / 2, time_segmentThickness, time_digitHeight / 2}; // Bottom-right
+            segs[4] = (SDL_Rect){x, y + time_digitHeight / 2, time_segmentThickness, time_digitHeight / 2};                                           // Bottom-left
+            segs[5] = (SDL_Rect){x, y, time_segmentThickness, time_digitHeight / 2};                                                                  // Top-left
 
-            // Draw the active segments for this digit
+            // Draw the active segments for this digit with a green glow
             for (int s = 0; s < 7; s++)
             {
                 if (segments[digit][s])
                 {
+                    // Draw glow effect first (larger, semi-transparent)
+                    SDL_SetRenderDrawColor(renderer, 80, 200, 80, 100);
+                    SDL_Rect glowRect = segs[s];
+                    glowRect.x -= 1;
+                    glowRect.y -= 1;
+                    glowRect.w += 2;
+                    glowRect.h += 2;
+                    SDL_RenderFillRect(renderer, &glowRect);
+
+                    // Draw main segment
+                    SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255);
                     SDL_RenderFillRect(renderer, &segs[s]);
                 }
             }
@@ -1755,64 +1893,165 @@ void renderGame()
     }
 
     // ===== Draw Health Hearts in top-right =====
-    // Health background
-    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
+    // Health background with gradient
+    SDL_SetRenderDrawColor(renderer, 30, 20, 30, 200);
     SDL_Rect healthRect = {WINDOW_WIDTH - 130, 10, 120, 40};
     SDL_RenderFillRect(renderer, &healthRect);
 
-    // Health border
-    SDL_SetRenderDrawColor(renderer, 200, 100, 100, 255);
+    // Add gradient to health panel
+    for (int i = 0; i < 40; i++)
+    {
+        int alpha = 160 - i * 3;
+        if (alpha < 0)
+            alpha = 0;
+        SDL_SetRenderDrawColor(renderer, 40, 15, 25, alpha);
+        SDL_Rect healthGradient = {WINDOW_WIDTH - 130, 10 + i, 120, 1};
+        SDL_RenderFillRect(renderer, &healthGradient);
+    }
+
+    // Nicer double border
+    SDL_SetRenderDrawColor(renderer, 150, 50, 50, 120);
+    SDL_Rect healthBorderOuter2 = {WINDOW_WIDTH - 132, 8, 124, 44};
+    SDL_RenderDrawRect(renderer, &healthBorderOuter2);
+
+    // Main border
+    SDL_SetRenderDrawColor(renderer, 220, 80, 80, 255);
     SDL_Rect healthBorder = {WINDOW_WIDTH - 130, 10, 120, 40};
     SDL_RenderDrawRect(renderer, &healthBorder);
 
-    // Draw hearts
+    // Draw hearts with improved design
     for (int i = 0; i < 3; i++)
     {
+        // Heart position
+        int heartX = WINDOW_WIDTH - 115 + i * 35;
+        int heartY = 25;
+        int heartSize = 20;
+
         if (i < health)
         {
-            // Full heart - red
-            SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
+            // Full heart - with improved 3D effect
+
+            // Outer glow for active hearts
+            SDL_SetRenderDrawColor(renderer, 255, 70, 70, 80);
+            SDL_Rect heartGlow = {heartX - 12, heartY - 12, 24, 24};
+            SDL_RenderFillRect(renderer, &heartGlow);
+
+            // Heart shape - filled with gradient
+            for (int y = 0; y < heartSize; y++)
+            {
+                for (int x = 0; x < heartSize; x++)
+                {
+                    int dx1 = x - heartSize / 4;
+                    int dy1 = y - heartSize / 4;
+                    int dx2 = x - 3 * heartSize / 4;
+                    int dy2 = y - heartSize / 4;
+                    int dx = x - heartSize / 2;
+                    int dy = y - heartSize / 2;
+
+                    // Check if the point is in the heart shape
+                    if ((dx1 * dx1 + dy1 * dy1 < heartSize * heartSize / 16 ||
+                         dx2 * dx2 + dy2 * dy2 < heartSize * heartSize / 16) &&
+                            y < heartSize / 2 ||
+                        (dx * dx + (dy + heartSize / 4) * (dy + heartSize / 4) < heartSize * heartSize / 12 &&
+                         y >= heartSize / 4))
+                    {
+                        // Create shading effect based on position
+                        int r = 255;
+                        int g = 20 + (y * 2);
+                        int b = 20 + (y * 2);
+                        if (g > 80)
+                            g = 80;
+                        if (b > 80)
+                            b = 80;
+
+                        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+                        SDL_RenderDrawPoint(renderer, heartX - heartSize / 2 + x, heartY - heartSize / 2 + y);
+                    }
+                }
+            }
+
+            // Add shine/highlight effect
+            SDL_SetRenderDrawColor(renderer, 255, 200, 200, 180);
+            for (int h = 0; h < 4; h++)
+            {
+                for (int w = 0; w < 3 - h / 2; w++)
+                {
+                    SDL_RenderDrawPoint(renderer, heartX - heartSize / 4 - w, heartY - heartSize / 4 - h);
+                }
+            }
         }
         else
         {
-            // Empty heart - gray outline
-            SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-        }
-
-        // Draw a heart shape - simplified
-        int heartX = WINDOW_WIDTH - 115 + i * 35;
-        int heartY = 25;
-
-        // Draw heart shape (very simplified)
-        SDL_Point heartPoints[] = {
-            {heartX, heartY + 5},
-            {heartX - 8, heartY - 3},
-            {heartX - 4, heartY - 7},
-            {heartX, heartY - 2},
-            {heartX + 4, heartY - 7},
-            {heartX + 8, heartY - 3},
-            {heartX, heartY + 5}};
-
-        SDL_RenderDrawLines(renderer, heartPoints, 7);
-
-        // Fill heart if it's a full heart
-        if (i < health)
-        {
-            for (int y = heartY - 6; y <= heartY + 4; y++)
+            // Empty heart - improved outline
+            // Draw heart outline with anti-aliasing effect
+            for (int y = 0; y < heartSize; y++)
             {
-                for (int x = heartX - 7; x <= heartX + 7; x++)
+                for (int x = 0; x < heartSize; x++)
                 {
-                    // Simple formula to check if point is inside heart shape
-                    int dx = x - heartX;
-                    int dy = y - heartY;
-                    if ((dx * dx + dy * dy) < 50 && y <= heartY + 5)
+                    int dx1 = x - heartSize / 4;
+                    int dy1 = y - heartSize / 4;
+                    int dx2 = x - 3 * heartSize / 4;
+                    int dy2 = y - heartSize / 4;
+                    int dx = x - heartSize / 2;
+                    int dy = y - heartSize / 2;
+
+                    float distance = 0;
+
+                    // Calculate distance to the heart shape boundary
+                    if (y < heartSize / 2)
                     {
-                        SDL_RenderDrawPoint(renderer, x, y);
+                        float d1 = sqrtf(dx1 * dx1 + dy1 * dy1) - heartSize / 4;
+                        float d2 = sqrtf(dx2 * dx2 + dy2 * dy2) - heartSize / 4;
+                        distance = (d1 < d2) ? d1 : d2;
+                    }
+                    else
+                    {
+                        distance = sqrtf(dx * dx + (dy + heartSize / 4) * (dy + heartSize / 4)) - heartSize / sqrt(12);
+                    }
+
+                    // Draw outline with thickness and anti-aliasing
+                    if (fabsf(distance) < 1.5f)
+                    {
+                        int alpha = 255 - (int)(fabsf(distance) * 100);
+                        if (alpha < 0)
+                            alpha = 0;
+                        if (alpha > 255)
+                            alpha = 255;
+
+                        SDL_SetRenderDrawColor(renderer, 180, 180, 180, alpha);
+                        SDL_RenderDrawPoint(renderer, heartX - heartSize / 2 + x, heartY - heartSize / 2 + y);
                     }
                 }
             }
         }
     }
+
+    // ===== Draw hearts in top-left =====
+    // Hearts container with gradient background
+    SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
+    SDL_Rect heartsRect = {10, 10, 160, 50};
+    SDL_RenderFillRect(renderer, &heartsRect);
+
+    // Add gradient to hearts container
+    for (int i = 0; i < 50; i++)
+    {
+        int alpha = 160 - i * 3;
+        if (alpha < 0)
+            alpha = 0;
+        SDL_SetRenderDrawColor(renderer, 20, 20, 40, alpha);
+        SDL_Rect heartsGradient = {10, 10 + i, 160, 1};
+        SDL_RenderFillRect(renderer, &heartsGradient);
+    }
+
+    // Double border for hearts container - outer
+    SDL_SetRenderDrawColor(renderer, 200, 80, 80, 255);
+    SDL_Rect heartsBorderOuter = {9, 9, 162, 52};
+    SDL_RenderDrawRect(renderer, &heartsBorderOuter);
+
+    // Inner border with accent color
+    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+    SDL_Rect heartsBorder = {10, 10, 160, 50};
+    SDL_RenderDrawRect(renderer, &heartsBorder);
 
     // Draw each game object
     for (int i = 0; i < MAX_FRUITS; i++)
