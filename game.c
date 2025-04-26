@@ -1989,12 +1989,12 @@ void renderGame()
 
     // Timer background
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 60, 10, 120, 40}; // Increased width from 100 to 120
+    SDL_Rect timerRect = {WINDOW_WIDTH / 2 - 60, 10, 120, 50}; // Increased width from 100 to 120
     SDL_RenderFillRect(renderer, &timerRect);
 
     // Timer border
     SDL_SetRenderDrawColor(renderer, 100, 200, 100, 255);
-    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 60, 10, 120, 40}; // Increased width from 100 to 120
+    SDL_Rect timerBorder = {WINDOW_WIDTH / 2 - 60, 10, 120, 50}; // Increased width from 100 to 120
     SDL_RenderDrawRect(renderer, &timerBorder);
 
     // Display timer as MM:SS
@@ -2005,9 +2005,9 @@ void renderGame()
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
     // Calculate position to center timer text
-    int timerDigitWidth = 8; // Reduced size from 10 to 8
-    int digitHeight = 16;
-    int segmentThickness = 2;
+    int timerDigitWidth = 10; // Increased for better visibility
+    int digitHeight = 24;     // Increased for better visibility
+    int segmentThickness = 3; // Thicker segments
 
     // Calculate width of timer text (5 characters plus spacing)
     int timerTextWidth = 5 * timerDigitWidth + 4 * 2; // 5 chars (MM:SS) with 2px spacing between each
@@ -2020,8 +2020,11 @@ void renderGame()
         if (timeStr[i] == ':')
         {
             // Draw colon with larger dots
-            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + 2), timeY + 4, 3, 3};
-            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + 2), timeY + 10, 3, 3};
+            int dotSize = digitHeight / 5;
+            int dotY1 = timeY + digitHeight / 3 - dotSize / 2;
+            int dotY2 = timeY + 2 * digitHeight / 3 - dotSize / 2;
+            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + 2), dotY1, dotSize, dotSize};
+            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + 2), dotY2, dotSize, dotSize};
             SDL_RenderFillRect(renderer, &colon1);
             SDL_RenderFillRect(renderer, &colon2);
         }
@@ -2081,15 +2084,21 @@ void renderGame()
     // ===== Draw Health Hearts in top-right =====
     // Health background
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect healthRect = {WINDOW_WIDTH - 130, 10, 120, 40};
+    SDL_Rect healthRect = {WINDOW_WIDTH - 130, 10, 120, 50}; // Increased height to match timer
     SDL_RenderFillRect(renderer, &healthRect);
 
     // Health border
     SDL_SetRenderDrawColor(renderer, 200, 100, 100, 255);
-    SDL_Rect healthBorder = {WINDOW_WIDTH - 130, 10, 120, 40};
+    SDL_Rect healthBorder = {WINDOW_WIDTH - 130, 10, 120, 50}; // Increased height to match timer
     SDL_RenderDrawRect(renderer, &healthBorder);
 
     // Draw hearts
+    // Calculate total width of all hearts with spacing between them
+    int heartWidth = 16;   // Approximate width of a heart
+    int heartSpacing = 25; // Space between hearts
+    int totalHeartsWidth = (3 * heartWidth) + (2 * heartSpacing);
+    int startX = healthRect.x + (healthRect.w - totalHeartsWidth) / 2;
+
     for (int i = 0; i < 3; i++)
     {
         if (i < health)
@@ -2104,8 +2113,8 @@ void renderGame()
         }
 
         // Draw a heart shape - simplified
-        int heartX = WINDOW_WIDTH - 115 + i * 35;
-        int heartY = 25;
+        int heartX = startX + i * (heartWidth + heartSpacing);
+        int heartY = healthRect.y + healthRect.h / 2; // Center hearts vertically in the box
 
         // Draw heart shape (very simplified)
         SDL_Point heartPoints[] = {
