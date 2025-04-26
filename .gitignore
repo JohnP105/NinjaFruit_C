@@ -33,7 +33,7 @@ Mkfile.old
 dkms.conf
 
 # Generated highscore file
-highscore.txt
+leaderboard.txt
 
 # Editor files
 .vscode/
