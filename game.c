@@ -19,7 +19,7 @@
 #define WINDOW_HEIGHT 600
 #define MAX_FRUITS 20
 #define FRUIT_TYPES 3  // Apple, Banana, Orange
-#define BOMB_CHANCE 10 // 1 in 10 chance of spawning a bomb
+#define BOMB_CHANCE 30 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
 
 // Slicing animation constants
