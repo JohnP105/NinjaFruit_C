@@ -1046,10 +1046,10 @@ void *spawnObjects(void *arg)
                         if (!gameObjects[i].active)
                         {
                             // Random chance to spawn - reduced spawn rate
-                            if (need_emergency_spawn || rand() % 20 == 0) // Was 40, now 20 (more frequent)
+                            if (need_emergency_spawn || rand() % 15 == 0) // Was 20 (more frequent now)
                             {
                                 spawnFruit(i);
-                                spawn_cooldown = 3; // Reduced cooldown (was 5)
+                                spawn_cooldown = 2; // Reduced cooldown (was 3)
                                 spawned_something = true;
                                 last_spawn_time = current_time;
                                 break;
@@ -1060,7 +1060,7 @@ void *spawnObjects(void *arg)
                 else if (spawn_mode == 1 && active_count < MAX_FRUITS - 5) // Cluster spawning
                 {
                     // Spawn a cluster of 3-5 fruits close together - less frequently
-                    if (need_emergency_spawn || rand() % 40 == 0) // Was 70, now 40 (more frequent)
+                    if (need_emergency_spawn || rand() % 30 == 0) // Was 40 (more frequent now)
                     {
                         int cluster_size = 3 + rand() % 3; // 3-5 fruits
                         int base_x = 100 + rand() % (WINDOW_WIDTH - 200);
@@ -1080,7 +1080,7 @@ void *spawnObjects(void *arg)
                                 spawned++;
                             }
                         }
-                        spawn_cooldown = 40; // Reduced cooldown (was 70)
+                        spawn_cooldown = 25; // Reduced cooldown (was 40)
                         spawned_something = true;
                         last_spawn_time = current_time;
                     }
@@ -1088,7 +1088,7 @@ void *spawnObjects(void *arg)
                 else if (spawn_mode == 2) // Line formation
                 {
                     // Spawn fruits in a horizontal line for slicing swipes - less frequently
-                    if (need_emergency_spawn || rand() % 50 == 0) // Was 80, now 50 (more frequent)
+                    if (need_emergency_spawn || rand() % 35 == 0) // Was 50 (more frequent now)
                     {
                         int line_count = 4 + rand() % 3; // 4-6 fruits
                         int spacing = FRUIT_SIZE + 10;
@@ -1110,7 +1110,7 @@ void *spawnObjects(void *arg)
                                 spawned++;
                             }
                         }
-                        spawn_cooldown = 50; // Reduced cooldown (was 90)
+                        spawn_cooldown = 30; // Reduced cooldown (was 50)
                         spawned_something = true;
                         last_spawn_time = current_time;
                     }
@@ -1184,12 +1184,12 @@ void spawnFruit(int index)
     gameObjects[index].y = 0; // Drop from the top of the screen
 
     // Random horizontal velocity component with increased speed
-    gameObjects[index].vx = (-3.0f + (rand() % 60) / 10.0f) * 1.3f; // 30% faster
-    gameObjects[index].vy = (2.0f + (rand() % 30) / 10.0f) * 1.3f;  // 30% faster
+    gameObjects[index].vx = (-3.0f + (rand() % 60) / 10.0f) * 1.5f; // 50% faster (was 1.3f)
+    gameObjects[index].vy = (2.0f + (rand() % 30) / 10.0f) * 1.5f;  // 50% faster (was 1.3f)
 
     gameObjects[index].sliced = 0;
     gameObjects[index].rotation = 0.0f;
-    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.2f; // Slightly faster rotation
+    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.5f; // Faster rotation (was 1.2f)
     if (rand() % 2)
         gameObjects[index].rotSpeed *= -1; // Random direction
 
@@ -1218,12 +1218,12 @@ void spawnFruitAt(int index, float x, float y, float vx, float vy)
     gameObjects[index].y = y;
 
     // Apply speed multiplier
-    gameObjects[index].vx = vx * 1.3f; // 30% faster
-    gameObjects[index].vy = vy * 1.3f; // 30% faster
+    gameObjects[index].vx = vx * 1.5f; // 50% faster (was 1.3f)
+    gameObjects[index].vy = vy * 1.5f; // 50% faster (was 1.3f)
 
     gameObjects[index].sliced = 0;
     gameObjects[index].rotation = 0.0f;
-    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.2f;
+    gameObjects[index].rotSpeed = (0.05f + ((float)rand() / RAND_MAX) * 0.1f) * 1.5f; // Faster rotation (was 1.2f)
     if (rand() % 2)
         gameObjects[index].rotSpeed *= -1; // Random direction
 
@@ -1480,7 +1480,7 @@ void handleEvents()
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
 
                                     gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
                                     gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
@@ -1518,7 +1518,7 @@ void handleEvents()
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
 
                                     gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
                                     gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
@@ -1557,7 +1557,7 @@ void handleEvents()
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
 
                                     gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
                                     gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
@@ -1626,7 +1626,7 @@ void handleEvents()
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
 
                                     gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
                                     gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
@@ -1697,7 +1697,7 @@ void handleEvents()
 
                                     // Different velocities for each piece
                                     float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = 2.0f + (rand() % 20) / 10.0f;
+                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
 
                                     gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
                                     gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
@@ -1774,7 +1774,7 @@ void updateGame()
         if (gameObjects[i].active)
         {
             // Update main fruit position
-            gameObjects[i].vy += 0.2f; // Gravity effect
+            gameObjects[i].vy += 0.3f; // Increased gravity effect (was 0.2f)
             gameObjects[i].x += gameObjects[i].vx;
             gameObjects[i].y += gameObjects[i].vy;
             gameObjects[i].rotation += gameObjects[i].rotSpeed;
@@ -1786,7 +1786,7 @@ void updateGame()
                 {
                     if (gameObjects[i].pieces[j].timeLeft > 0)
                     {
-                        gameObjects[i].pieces[j].vy += 0.3f; // Heavier gravity for pieces
+                        gameObjects[i].pieces[j].vy += 0.45f; // Heavier gravity for pieces (was 0.3f)
                         gameObjects[i].pieces[j].x += gameObjects[i].pieces[j].vx;
                         gameObjects[i].pieces[j].y += gameObjects[i].pieces[j].vy;
                         gameObjects[i].pieces[j].rotation += gameObjects[i].pieces[j].rotSpeed;
