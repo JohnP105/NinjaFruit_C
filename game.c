@@ -1543,12 +1543,8 @@ void updateGame()
                 {
                     gameObjects[i].active = 0;
 
-                    // Penalty for missing a fruit (not bombs)
-                    if (gameObjects[i].type != BOMB && !gameObjects[i].sliced)
-                    {
-                        score -= 1;
-                        printf("Fruit missed! Score: %d\n", score);
-                    }
+                    // No penalty for missing a fruit - REMOVED
+                    // Just deactivate the fruit without affecting score
                 }
             }
         }
