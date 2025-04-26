@@ -17,10 +17,26 @@
 // Game constants
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
-#define MAX_FRUITS 20
+#define MAX_FRUITS 203
 #define FRUIT_TYPES 3 // Apple, Banana, Orange
 #define BOMB_CHANCE 5 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
+#define MAX_SCORES 10 // Maximum number of high scores to track
+
+// Game states
+typedef enum
+{
+    STATE_PLAYING,
+    STATE_GAME_OVER,
+    STATE_LEADERBOARD
+} GameState;
+
+// Score record for leaderboard
+typedef struct
+{
+    int score;
+    char date[20]; // Format: YYYY-MM-DD HH:MM:SS
+} ScoreRecord;
 
 // Deadlock detection constants
 #define MAX_RESOURCES 4
@@ -87,6 +103,9 @@ int game_time = 0;     // Game timer in seconds
 Uint32 start_time = 0; // Start time in milliseconds
 int running = 1;
 int spawn_pipe[2]; // Pipe for communicating with spawn process
+GameState game_state = STATE_PLAYING;
+ScoreRecord leaderboard[MAX_SCORES];
+int num_scores = 0;
 
 // Deadlock detection globals
 DeadlockDetector deadlock_detector;
@@ -126,6 +145,11 @@ int lineCircleIntersect(float line_x1, float line_y1, float line_x2, float line_
 void spawnFruit(int index);
 void spawnFruitAt(int index, float x, float y, float vx, float vy);
 void resetGame();
+void loadScores();
+void saveScores();
+void addScore(int new_score);
+void drawDigitalChar(SDL_Renderer *renderer, char c, int x, int y, int w, int h);
+void drawDigitalText(SDL_Renderer *renderer, const char *text, int x, int y, int charWidth, int charHeight, int spacing);
 
 // Initialize deadlock detector
 void initDeadlockDetector()
@@ -954,6 +978,9 @@ int initGame(void)
         return 0;
     }
 
+    // Load scores from file
+    loadScores();
+
     return 1; // Success
 }
 
@@ -1422,252 +1449,31 @@ void handleEvents()
         }
         else if (e.type == SDL_MOUSEMOTION)
         {
+            // Store previous position before updating current
             prev_prev_mouse_x = prev_mouse_x;
             prev_prev_mouse_y = prev_mouse_y;
             prev_mouse_x = mouse_x;
             prev_mouse_y = mouse_y;
+
+            // Update current mouse position
             mouse_x = e.motion.x;
             mouse_y = e.motion.y;
 
-            // Improve slice detection - check if mouse moved fast enough to count as a slice
-            float mouse_movement = sqrt(pow(mouse_x - prev_mouse_x, 2) + pow(mouse_y - prev_mouse_y, 2));
-
-            // Only count as a slice if the movement is significant
-            if (mouse_movement > 5)
+            // Only process mouse movement for slicing if we're in the PLAYING state
+            if (game_state == STATE_PLAYING)
             {
-                pthread_mutex_lock(&game_mutex);
+                // Improve slice detection - check if mouse moved fast enough to count as a slice
+                float mouse_movement = sqrt(pow(mouse_x - prev_mouse_x, 2) + pow(mouse_y - prev_mouse_y, 2));
 
-                // Track which objects were sliced to avoid double-counting
-                int sliced_objects[MAX_FRUITS] = {0};
-
-                // First check if the line formed by mouse movement intersects any fruit
-                for (int i = 0; i < MAX_FRUITS; i++)
+                // Only count as a slice if the movement is significant
+                if (mouse_movement > 5)
                 {
-                    if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
-                    {
-                        float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
-                        float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
+                    pthread_mutex_lock(&game_mutex);
 
-                        // Use a generous radius for line intersection test - larger for bananas and oranges
-                        float hit_radius;
-                        if (gameObjects[i].type == BANANA)
-                        {
-                            // Bananas need a wider hit area due to their elongated shape
-                            hit_radius = FRUIT_SIZE * 0.8f;
+                    // Track which objects were sliced to avoid double-counting
+                    int sliced_objects[MAX_FRUITS] = {0};
 
-                            // For bananas, also check with an offset based on rotation to account for its curve
-                            float offset_x = cos(gameObjects[i].rotation) * FRUIT_SIZE * 0.2f;
-                            float offset_y = sin(gameObjects[i].rotation) * FRUIT_SIZE * 0.1f;
-
-                            // Check both the center and the offset points
-                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
-                                                    center_x + offset_x, center_y + offset_y, hit_radius) ||
-                                lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
-                                                    center_x, center_y, hit_radius))
-                            {
-                                // Fruit hit by slice line!
-                                gameObjects[i].sliced = 1;
-                                sliced_objects[i] = 1;
-
-                                // Initialize slice pieces
-                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
-
-                                // Create two pieces moving in different directions
-                                for (int j = 0; j < SLICE_PIECES; j++)
-                                {
-                                    gameObjects[i].pieces[j].x = center_x;
-                                    gameObjects[i].pieces[j].y = center_y;
-
-                                    // Different velocities for each piece
-                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
-
-                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
-                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
-                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
-                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
-                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
-                                }
-
-                                // Play slice sound
-                                Mix_PlayChannel(-1, sliceSound, 0);
-                                score += 1;
-                                printf("Banana sliced! Score: %d\n", score);
-                            }
-                        }
-                        else if (gameObjects[i].type == ORANGE)
-                        {
-                            // Oranges can have a larger radius since they're round
-                            hit_radius = FRUIT_SIZE * 0.55f; // Match exactly with orangeRadius in rendering (0.85f of halfSize = 0.55f of FRUIT_SIZE)
-
-                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
-                                                    center_x, center_y, hit_radius))
-                            {
-                                // Orange hit by slice line!
-                                gameObjects[i].sliced = 1;
-                                sliced_objects[i] = 1;
-
-                                // Initialize slice pieces
-                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
-
-                                // Create two pieces moving in different directions
-                                for (int j = 0; j < SLICE_PIECES; j++)
-                                {
-                                    gameObjects[i].pieces[j].x = center_x;
-                                    gameObjects[i].pieces[j].y = center_y;
-
-                                    // Different velocities for each piece
-                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
-
-                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
-                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
-                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
-                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
-                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
-                                }
-
-                                // Play slice sound
-                                Mix_PlayChannel(-1, sliceSound, 0);
-                                score += 1;
-                                printf("Orange sliced! Score: %d\n", score);
-                            }
-                        }
-                        else
-                        {
-                            // For other fruit types and bombs
-                            hit_radius = FRUIT_SIZE * 0.7f;
-
-                            // Check current movement path
-                            if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
-                                                    center_x, center_y, hit_radius))
-                            {
-                                // Fruit hit by slice line!
-                                gameObjects[i].sliced = 1;
-                                sliced_objects[i] = 1;
-
-                                // Initialize slice pieces
-                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
-
-                                // Create two pieces moving in different directions
-                                for (int j = 0; j < SLICE_PIECES; j++)
-                                {
-                                    gameObjects[i].pieces[j].x = center_x;
-                                    gameObjects[i].pieces[j].y = center_y;
-
-                                    // Different velocities for each piece
-                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
-
-                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
-                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
-                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
-                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
-                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
-                                }
-
-                                if (gameObjects[i].type == BOMB)
-                                {
-                                    // Play bomb sound
-                                    Mix_PlayChannel(-1, bombSound, 0);
-                                    // Reduce health when bomb is sliced
-                                    health--;
-                                    if (health <= 0)
-                                    {
-                                        printf("Game Over! Final score: %d\n", score);
-                                        health = 0; // Ensure health doesn't go below 0
-                                        // Will handle game over in main loop
-                                    }
-                                    // No score penalty for bombs
-                                    printf("Bomb sliced! Health: %d\n", health);
-                                }
-                                else
-                                {
-                                    // Play slice sound
-                                    Mix_PlayChannel(-1, sliceSound, 0);
-                                    score += 1;
-                                    printf("Fruit sliced! Score: %d\n", score);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Also check slice along multiple points on the path for very precise slicing
-                int samples = 12; // Good balance of precision and performance
-
-                for (int t = 0; t <= samples; t++)
-                {
-                    float lerp = (float)t / samples;
-                    int slice_x = prev_mouse_x + (mouse_x - prev_mouse_x) * lerp;
-                    int slice_y = prev_mouse_y + (mouse_y - prev_mouse_y) * lerp;
-
-                    for (int i = 0; i < MAX_FRUITS; i++)
-                    {
-                        // Only process objects that haven't been sliced yet in this motion
-                        if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
-                        {
-                            // Use improved collision detection function
-                            if (checkCollision(slice_x, slice_y, &gameObjects[i]))
-                            {
-                                gameObjects[i].sliced = 1;
-                                sliced_objects[i] = 1;
-
-                                // Initialize slice pieces
-                                float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
-                                float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
-                                float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
-
-                                // Create two pieces moving in different directions
-                                for (int j = 0; j < SLICE_PIECES; j++)
-                                {
-                                    gameObjects[i].pieces[j].x = center_x;
-                                    gameObjects[i].pieces[j].y = center_y;
-
-                                    // Different velocities for each piece
-                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
-
-                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
-                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
-                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
-                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
-                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
-                                }
-
-                                if (gameObjects[i].type == BOMB)
-                                {
-                                    // Play bomb sound
-                                    Mix_PlayChannel(-1, bombSound, 0);
-                                    // Reduce health when bomb is sliced
-                                    health--;
-                                    if (health <= 0)
-                                    {
-                                        printf("Game Over! Final score: %d\n", score);
-                                        health = 0; // Ensure health doesn't go below 0
-                                        // Will handle game over in main loop
-                                    }
-                                    // No score penalty for bombs
-                                    printf("Bomb sliced! Health: %d\n", health);
-                                }
-                                else
-                                {
-                                    // Play slice sound
-                                    Mix_PlayChannel(-1, sliceSound, 0);
-                                    score += 1;
-                                    printf("Fruit sliced! Score: %d\n", score);
-                                }
-
-                                // Don't break here - need to check remaining fruits
-                            }
-                        }
-                    }
-                }
-
-                // Also check the longer trail path (previous-previous to current)
-                // This helps catch objects in fast swipes
-                if (mouse_movement > 20) // Only for fast movements
-                {
+                    // First check if the line formed by mouse movement intersects any fruit
                     for (int i = 0; i < MAX_FRUITS; i++)
                     {
                         if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
@@ -1675,80 +1481,299 @@ void handleEvents()
                             float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
                             float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
 
-                            // Use a generous radius for line intersection test
-                            float hit_radius = FRUIT_SIZE * 0.75f;
-
-                            // Check the longer path from previous-previous to current
-                            if (lineCircleIntersect(prev_prev_mouse_x, prev_prev_mouse_y, mouse_x, mouse_y,
-                                                    center_x, center_y, hit_radius))
+                            // Use a generous radius for line intersection test - larger for bananas and oranges
+                            float hit_radius;
+                            if (gameObjects[i].type == BANANA)
                             {
-                                // Fruit hit by extended slice line!
-                                gameObjects[i].sliced = 1;
-                                sliced_objects[i] = 1;
+                                // Bananas need a wider hit area due to their elongated shape
+                                hit_radius = FRUIT_SIZE * 0.8f;
 
-                                // Initialize slice pieces
-                                float sliceAngle = atan2(mouse_y - prev_prev_mouse_y, mouse_x - prev_prev_mouse_x);
+                                // For bananas, also check with an offset based on rotation to account for its curve
+                                float offset_x = cos(gameObjects[i].rotation) * FRUIT_SIZE * 0.2f;
+                                float offset_y = sin(gameObjects[i].rotation) * FRUIT_SIZE * 0.1f;
 
-                                // Create two pieces moving in different directions
-                                for (int j = 0; j < SLICE_PIECES; j++)
+                                // Check both the center and the offset points
+                                if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                        center_x + offset_x, center_y + offset_y, hit_radius) ||
+                                    lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                        center_x, center_y, hit_radius))
                                 {
-                                    gameObjects[i].pieces[j].x = center_x;
-                                    gameObjects[i].pieces[j].y = center_y;
+                                    // Fruit hit by slice line!
+                                    gameObjects[i].sliced = 1;
+                                    sliced_objects[i] = 1;
 
-                                    // Different velocities for each piece
-                                    float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
-                                    float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
+                                    // Initialize slice pieces
+                                    float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
 
-                                    gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
-                                    gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
-                                    gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
-                                    gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
-                                    gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
-                                }
-
-                                if (gameObjects[i].type == BOMB)
-                                {
-                                    // Play bomb sound
-                                    Mix_PlayChannel(-1, bombSound, 0);
-                                    // Reduce health when bomb is sliced
-                                    health--;
-                                    if (health <= 0)
+                                    // Create two pieces moving in different directions
+                                    for (int j = 0; j < SLICE_PIECES; j++)
                                     {
-                                        printf("Game Over! Final score: %d\n", score);
-                                        health = 0; // Ensure health doesn't go below 0
-                                        // Will handle game over in main loop
+                                        gameObjects[i].pieces[j].x = center_x;
+                                        gameObjects[i].pieces[j].y = center_y;
+
+                                        // Different velocities for each piece
+                                        float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                        float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
+
+                                        gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                        gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                        gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                        gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                        gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
                                     }
-                                    // No score penalty for bombs
-                                    printf("Bomb sliced! Health: %d\n", health);
-                                }
-                                else
-                                {
+
                                     // Play slice sound
                                     Mix_PlayChannel(-1, sliceSound, 0);
                                     score += 1;
-                                    printf("Fruit sliced! Score: %d\n", score);
+                                    printf("Banana sliced! Score: %d\n", score);
+                                }
+                            }
+                            else if (gameObjects[i].type == ORANGE)
+                            {
+                                // Oranges can have a larger radius since they're round
+                                hit_radius = FRUIT_SIZE * 0.55f; // Match exactly with orangeRadius in rendering (0.85f of halfSize = 0.55f of FRUIT_SIZE)
+
+                                if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                        center_x, center_y, hit_radius))
+                                {
+                                    // Orange hit by slice line!
+                                    gameObjects[i].sliced = 1;
+                                    sliced_objects[i] = 1;
+
+                                    // Initialize slice pieces
+                                    float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+
+                                    // Create two pieces moving in different directions
+                                    for (int j = 0; j < SLICE_PIECES; j++)
+                                    {
+                                        gameObjects[i].pieces[j].x = center_x;
+                                        gameObjects[i].pieces[j].y = center_y;
+
+                                        // Different velocities for each piece
+                                        float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                        float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
+
+                                        gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                        gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                        gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                        gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                        gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                    }
+
+                                    // Play slice sound
+                                    Mix_PlayChannel(-1, sliceSound, 0);
+                                    score += 1;
+                                    printf("Orange sliced! Score: %d\n", score);
+                                }
+                            }
+                            else
+                            {
+                                // For other fruit types and bombs
+                                hit_radius = FRUIT_SIZE * 0.7f;
+
+                                // Check current movement path
+                                if (lineCircleIntersect(prev_mouse_x, prev_mouse_y, mouse_x, mouse_y,
+                                                        center_x, center_y, hit_radius))
+                                {
+                                    // Fruit hit by slice line!
+                                    gameObjects[i].sliced = 1;
+                                    sliced_objects[i] = 1;
+
+                                    // Initialize slice pieces
+                                    float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+
+                                    // Create two pieces moving in different directions
+                                    for (int j = 0; j < SLICE_PIECES; j++)
+                                    {
+                                        gameObjects[i].pieces[j].x = center_x;
+                                        gameObjects[i].pieces[j].y = center_y;
+
+                                        // Different velocities for each piece
+                                        float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                        float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
+
+                                        gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                        gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                        gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                        gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                        gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                    }
+
+                                    if (gameObjects[i].type == BOMB)
+                                    {
+                                        // Play bomb sound
+                                        Mix_PlayChannel(-1, bombSound, 0);
+                                        // Reduce health when bomb is sliced
+                                        health--;
+                                        if (health <= 0)
+                                        {
+                                            printf("Game Over! Final score: %d\n", score);
+                                            health = 0; // Ensure health doesn't go below 0
+                                            game_state = STATE_GAME_OVER;
+                                            addScore(score);
+                                        }
+                                        // No score penalty for bombs
+                                        printf("Bomb sliced! Health: %d\n", health);
+                                    }
+                                    else
+                                    {
+                                        // Play slice sound
+                                        Mix_PlayChannel(-1, sliceSound, 0);
+                                        score += 1;
+                                        printf("Fruit sliced! Score: %d\n", score);
+                                    }
                                 }
                             }
                         }
                     }
+
+                    // Also check slice along multiple points on the path for very precise slicing
+                    int samples = 12; // Good balance of precision and performance
+
+                    for (int t = 0; t <= samples; t++)
+                    {
+                        float lerp = (float)t / samples;
+                        int slice_x = prev_mouse_x + (mouse_x - prev_mouse_x) * lerp;
+                        int slice_y = prev_mouse_y + (mouse_y - prev_mouse_y) * lerp;
+
+                        for (int i = 0; i < MAX_FRUITS; i++)
+                        {
+                            // Only process objects that haven't been sliced yet in this motion
+                            if (gameObjects[i].active && !gameObjects[i].sliced && !sliced_objects[i])
+                            {
+                                // Use improved collision detection function
+                                if (checkCollision(slice_x, slice_y, &gameObjects[i]))
+                                {
+                                    gameObjects[i].sliced = 1;
+                                    sliced_objects[i] = 1;
+
+                                    // Initialize slice pieces
+                                    float sliceAngle = atan2(mouse_y - prev_mouse_y, mouse_x - prev_mouse_x);
+                                    float center_x = gameObjects[i].x + FRUIT_SIZE / 2;
+                                    float center_y = gameObjects[i].y + FRUIT_SIZE / 2;
+
+                                    // Create two pieces moving in different directions
+                                    for (int j = 0; j < SLICE_PIECES; j++)
+                                    {
+                                        gameObjects[i].pieces[j].x = center_x;
+                                        gameObjects[i].pieces[j].y = center_y;
+
+                                        // Different velocities for each piece
+                                        float pieceAngle = sliceAngle + (j == 0 ? M_PI / 2 : -M_PI / 2);
+                                        float speed = (2.0f + (rand() % 20) / 10.0f) * 1.5f; // 50% faster
+
+                                        gameObjects[i].pieces[j].vx = cos(pieceAngle) * speed;
+                                        gameObjects[i].pieces[j].vy = sin(pieceAngle) * speed + gameObjects[i].vy / 2;
+                                        gameObjects[i].pieces[j].rotation = gameObjects[i].rotation;
+                                        gameObjects[i].pieces[j].rotSpeed = gameObjects[i].rotSpeed * 2.0f * (j == 0 ? 1 : -1);
+                                        gameObjects[i].pieces[j].timeLeft = SLICE_DURATION;
+                                    }
+
+                                    if (gameObjects[i].type == BOMB)
+                                    {
+                                        // Play bomb sound
+                                        Mix_PlayChannel(-1, bombSound, 0);
+                                        // Reduce health when bomb is sliced
+                                        health--;
+                                        if (health <= 0)
+                                        {
+                                            printf("Game Over! Final score: %d\n", score);
+                                            health = 0; // Ensure health doesn't go below 0
+                                            game_state = STATE_GAME_OVER;
+                                            addScore(score);
+                                        }
+                                        // No score penalty for bombs
+                                        printf("Bomb sliced! Health: %d\n", health);
+                                    }
+                                    else
+                                    {
+                                        // Play slice sound
+                                        Mix_PlayChannel(-1, sliceSound, 0);
+                                        score += 1;
+                                        printf("Fruit sliced! Score: %d\n", score);
+                                    }
+
+                                    // Don't break here - need to check remaining fruits
+                                }
+                            }
+                        }
+                    }
+
+                    pthread_mutex_unlock(&game_mutex);
+
+                    // Set mouse_down to true for rendering the slice trail
+                    mouse_down = 1;
+                }
+                else
+                {
+                    // If mouse barely moved, don't show the slice trail
+                    mouse_down = 0;
+                }
+            }
+        }
+        else if (e.type == SDL_MOUSEBUTTONDOWN)
+        {
+            // Game over screen button clicks
+            if (game_state == STATE_GAME_OVER)
+            {
+                int mouseX = e.button.x;
+                int mouseY = e.button.y;
+
+                // Check if the click is on the "Restart" button
+                SDL_Rect restartButton = {WINDOW_WIDTH / 2 - 120, WINDOW_HEIGHT / 2 + 20, 100, 40};
+                if (mouseX >= restartButton.x && mouseX <= restartButton.x + restartButton.w &&
+                    mouseY >= restartButton.y && mouseY <= restartButton.y + restartButton.h)
+                {
+                    // Reset the game
+                    resetGame();
+                    return;
                 }
 
-                pthread_mutex_unlock(&game_mutex);
-
-                // Set mouse_down to true for rendering the slice trail
-                mouse_down = 1;
+                // Check if the click is on the "Leaderboard" button
+                SDL_Rect leaderboardButton = {WINDOW_WIDTH / 2 + 20, WINDOW_HEIGHT / 2 + 20, 100, 40};
+                if (mouseX >= leaderboardButton.x && mouseX <= leaderboardButton.x + leaderboardButton.w &&
+                    mouseY >= leaderboardButton.y && mouseY <= leaderboardButton.y + leaderboardButton.h)
+                {
+                    // Show leaderboard
+                    game_state = STATE_LEADERBOARD;
+                    return;
+                }
             }
-            else
+            // Leaderboard screen back button click
+            else if (game_state == STATE_LEADERBOARD)
             {
-                // If mouse barely moved, don't show the slice trail
-                mouse_down = 0;
+                int mouseX = e.button.x;
+                int mouseY = e.button.y;
+
+                // Check if the click is on the "Back" button
+                SDL_Rect backButton = {WINDOW_WIDTH / 2 - 50, WINDOW_HEIGHT - 70, 100, 40};
+                if (mouseX >= backButton.x && mouseX <= backButton.x + backButton.w &&
+                    mouseY >= backButton.y && mouseY <= backButton.y + backButton.h)
+                {
+                    // Return to game over screen
+                    game_state = STATE_GAME_OVER;
+                    return;
+                }
             }
         }
         else if (e.type == SDL_KEYDOWN)
         {
             if (e.key.keysym.sym == SDLK_ESCAPE)
             {
-                running = 0;
+                // In leaderboard state, go back to game over screen
+                if (game_state == STATE_LEADERBOARD)
+                {
+                    game_state = STATE_GAME_OVER;
+                }
+                else
+                {
+                    running = 0;
+                }
+            }
+            else if (e.key.keysym.sym == SDLK_r && game_state != STATE_PLAYING)
+            {
+                // Reset game if not currently playing
+                resetGame();
             }
         }
     }
@@ -1759,67 +1784,73 @@ void updateGame()
 {
     pthread_mutex_lock(&game_mutex);
 
-    // Update game timer
-    Uint32 current_time = SDL_GetTicks();
-    game_time = (current_time - start_time) / 1000; // Convert to seconds
-
-    // Check if game is over due to no health
-    if (health <= 0)
+    // Only update game objects if the game is active
+    if (game_state == STATE_PLAYING)
     {
-        // Game over handling will be in main loop
-    }
+        // Update game timer
+        Uint32 current_time = SDL_GetTicks();
+        game_time = (current_time - start_time) / 1000; // Convert to seconds
 
-    for (int i = 0; i < MAX_FRUITS; i++)
-    {
-        if (gameObjects[i].active)
+        // Check if game is over due to no health
+        if (health <= 0)
         {
-            // Update main fruit position
-            gameObjects[i].vy += 0.3f; // Increased gravity effect (was 0.2f)
-            gameObjects[i].x += gameObjects[i].vx;
-            gameObjects[i].y += gameObjects[i].vy;
-            gameObjects[i].rotation += gameObjects[i].rotSpeed;
+            // Change game state and save score
+            game_state = STATE_GAME_OVER;
+            addScore(score);
+        }
 
-            // Update slice pieces if sliced
-            if (gameObjects[i].sliced)
+        for (int i = 0; i < MAX_FRUITS; i++)
+        {
+            if (gameObjects[i].active)
             {
-                for (int j = 0; j < SLICE_PIECES; j++)
-                {
-                    if (gameObjects[i].pieces[j].timeLeft > 0)
-                    {
-                        gameObjects[i].pieces[j].vy += 0.45f; // Heavier gravity for pieces (was 0.3f)
-                        gameObjects[i].pieces[j].x += gameObjects[i].pieces[j].vx;
-                        gameObjects[i].pieces[j].y += gameObjects[i].pieces[j].vy;
-                        gameObjects[i].pieces[j].rotation += gameObjects[i].pieces[j].rotSpeed;
-                        gameObjects[i].pieces[j].timeLeft--;
-                    }
-                }
-            }
+                // Update main fruit position
+                gameObjects[i].vy += 0.3f; // Increased gravity effect (was 0.2f)
+                gameObjects[i].x += gameObjects[i].vx;
+                gameObjects[i].y += gameObjects[i].vy;
+                gameObjects[i].rotation += gameObjects[i].rotSpeed;
 
-            // Check if out of bounds
-            if (gameObjects[i].y > WINDOW_HEIGHT + FRUIT_SIZE ||
-                gameObjects[i].x < -FRUIT_SIZE ||
-                gameObjects[i].x > WINDOW_WIDTH + FRUIT_SIZE)
-            {
-                // Check if all animation is complete
-                bool animationDone = true;
+                // Update slice pieces if sliced
                 if (gameObjects[i].sliced)
                 {
                     for (int j = 0; j < SLICE_PIECES; j++)
                     {
                         if (gameObjects[i].pieces[j].timeLeft > 0)
                         {
-                            animationDone = false;
-                            break;
+                            gameObjects[i].pieces[j].vy += 0.45f; // Heavier gravity for pieces (was 0.3f)
+                            gameObjects[i].pieces[j].x += gameObjects[i].pieces[j].vx;
+                            gameObjects[i].pieces[j].y += gameObjects[i].pieces[j].vy;
+                            gameObjects[i].pieces[j].rotation += gameObjects[i].pieces[j].rotSpeed;
+                            gameObjects[i].pieces[j].timeLeft--;
                         }
                     }
                 }
 
-                if (animationDone)
+                // Check if out of bounds
+                if (gameObjects[i].y > WINDOW_HEIGHT + FRUIT_SIZE ||
+                    gameObjects[i].x < -FRUIT_SIZE ||
+                    gameObjects[i].x > WINDOW_WIDTH + FRUIT_SIZE)
                 {
-                    gameObjects[i].active = 0;
+                    // Check if all animation is complete
+                    bool animationDone = true;
+                    if (gameObjects[i].sliced)
+                    {
+                        for (int j = 0; j < SLICE_PIECES; j++)
+                        {
+                            if (gameObjects[i].pieces[j].timeLeft > 0)
+                            {
+                                animationDone = false;
+                                break;
+                            }
+                        }
+                    }
 
-                    // No penalty for missing a fruit - REMOVED
-                    // Just deactivate the fruit without affecting score
+                    if (animationDone)
+                    {
+                        gameObjects[i].active = 0;
+
+                        // No penalty for missing a fruit - REMOVED
+                        // Just deactivate the fruit without affecting score
+                    }
                 }
             }
         }
@@ -2008,15 +2039,21 @@ void renderGame()
             SDL_Rect segs[7];
 
             // Horizontal segments (top, middle, bottom)
-            segs[0] = (SDL_Rect){x, y, timerDigitWidth, segmentThickness};                                  // Top
-            segs[6] = (SDL_Rect){x, y + digitHeight / 2, timerDigitWidth, segmentThickness};                // Middle
-            segs[3] = (SDL_Rect){x, y + digitHeight - segmentThickness, timerDigitWidth, segmentThickness}; // Bottom
+            segs[0] = (SDL_Rect){x, y, timerDigitWidth, segmentThickness}; // Top
+
+            // Define local variables needed for rendering
+            int digitHeight = 30;                // Height of the digit
+            int digitWidth = timerDigitWidth;    // Use existing width
+            int segThickness = segmentThickness; // Use existing thickness
+
+            segs[6] = (SDL_Rect){x, y + digitHeight / 2 - segThickness / 2, digitWidth, segThickness}; // Middle
+            segs[3] = (SDL_Rect){x, y + digitHeight - segThickness, digitWidth, segThickness};         // Bottom
 
             // Vertical segments (top-right, bottom-right, bottom-left, top-left)
-            segs[1] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y, segmentThickness, digitHeight / 2};                   // Top-right
-            segs[2] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y + digitHeight / 2, segmentThickness, digitHeight / 2}; // Bottom-right
-            segs[4] = (SDL_Rect){x, y + digitHeight / 2, segmentThickness, digitHeight / 2};                                      // Bottom-left
-            segs[5] = (SDL_Rect){x, y, segmentThickness, digitHeight / 2};                                                        // Top-left
+            segs[1] = (SDL_Rect){x + digitWidth - segThickness, y, segThickness, digitHeight / 2};                   // Top-right
+            segs[2] = (SDL_Rect){x + digitWidth - segThickness, y + digitHeight / 2, segThickness, digitHeight / 2}; // Bottom-right
+            segs[4] = (SDL_Rect){x, y + digitHeight / 2, segThickness, digitHeight / 2};                             // Bottom-left
+            segs[5] = (SDL_Rect){x, y, segThickness, digitHeight / 2};                                               // Top-left
 
             // Draw the active segments for this digit
             for (int s = 0; s < 7; s++)
@@ -2249,7 +2286,7 @@ void renderGame()
     }
 
     // If game over, display a message
-    if (health <= 0)
+    if (game_state == STATE_GAME_OVER)
     {
         // Semi-transparent overlay
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
@@ -2266,33 +2303,93 @@ void renderGame()
         SDL_Rect messageBorder = {WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2 - 100, 300, 200};
         SDL_RenderDrawRect(renderer, &messageBorder);
 
-        // Game Over Text
+        // Game Over Text with digital display
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
         // Draw "GAME OVER" text
-        // (simplified text drawing)
-        int gameOverX = WINDOW_WIDTH / 2 - 70;
-        int gameOverY = WINDOW_HEIGHT / 2 - 50;
+        drawDigitalText(renderer, "GAME OVER", WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 70, 20, 30, 4);
 
-        // Draw final score
-        char finalScoreStr[40];
-        sprintf(finalScoreStr, "Final Score: %d", score);
+        // Draw final score with digital display
+        char scoreStr[20];
+        sprintf(scoreStr, "SCORE %d", score);
+        drawDigitalText(renderer, scoreStr, WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 20, 16, 24, 4);
 
-        // Draw score text in the game over box
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-        // Simplified rendering of "GAME OVER"
-        SDL_Rect gameOver = {gameOverX, gameOverY, 140, 30};
-        SDL_RenderDrawRect(renderer, &gameOver);
-
-        // Render "Play Again" button
+        // Render "Restart" button
         SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
-        SDL_Rect playAgainButton = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
-        SDL_RenderFillRect(renderer, &playAgainButton);
+        SDL_Rect restartButton = {WINDOW_WIDTH / 2 - 120, WINDOW_HEIGHT / 2 + 20, 100, 40};
+        SDL_RenderFillRect(renderer, &restartButton);
 
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect playAgainBorder = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
-        SDL_RenderDrawRect(renderer, &playAgainBorder);
+        SDL_RenderDrawRect(renderer, &restartButton);
+
+        // Draw "RESTART" text with digital display
+        drawDigitalText(renderer, "RESTART", restartButton.x + 10, restartButton.y + 10, 10, 20, 2);
+
+        // Render "Leaderboard" button
+        SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
+        SDL_Rect leaderboardButton = {WINDOW_WIDTH / 2 + 20, WINDOW_HEIGHT / 2 + 20, 100, 40};
+        SDL_RenderFillRect(renderer, &leaderboardButton);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &leaderboardButton);
+
+        // Draw "SCORES" text with digital display
+        drawDigitalText(renderer, "SCORES", leaderboardButton.x + 15, leaderboardButton.y + 10, 10, 20, 2);
+    }
+    // Display leaderboard
+    else if (game_state == STATE_LEADERBOARD)
+    {
+        // Semi-transparent overlay
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
+        SDL_Rect overlay = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
+        SDL_RenderFillRect(renderer, &overlay);
+
+        // Leaderboard box
+        SDL_SetRenderDrawColor(renderer, 50, 50, 70, 240);
+        SDL_Rect leaderboardBox = {WINDOW_WIDTH / 2 - 200, 50, 400, WINDOW_HEIGHT - 150};
+        SDL_RenderFillRect(renderer, &leaderboardBox);
+
+        // Box border
+        SDL_SetRenderDrawColor(renderer, 100, 100, 200, 255);
+        SDL_RenderDrawRect(renderer, &leaderboardBox);
+
+        // Draw "LEADERBOARD" title with digital display
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        drawDigitalText(renderer, "LEADERBOARD", WINDOW_WIDTH / 2 - 120, 70, 18, 30, 3);
+
+        // Display each score entry with digital display
+        for (int i = 0; i < num_scores; i++)
+        {
+            int y = 130 + i * 40;
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+            // Rank
+            char rankStr[5];
+            sprintf(rankStr, "%d.", i + 1);
+            drawDigitalText(renderer, rankStr, WINDOW_WIDTH / 2 - 180, y, 14, 24, 3);
+
+            // Score
+            char scoreStr[20];
+            sprintf(scoreStr, "%d", leaderboard[i].score);
+            drawDigitalText(renderer, scoreStr, WINDOW_WIDTH / 2 - 140, y, 14, 24, 3);
+
+            // Date (shortened to just show essential info)
+            char dateShort[15];
+            strncpy(dateShort, leaderboard[i].date, 10); // Just show the date part
+            dateShort[10] = '\0';
+            drawDigitalText(renderer, dateShort, WINDOW_WIDTH / 2 + 0, y, 10, 20, 2);
+        }
+
+        // Back button
+        SDL_SetRenderDrawColor(renderer, 80, 100, 200, 255);
+        SDL_Rect backButton = {WINDOW_WIDTH / 2 - 50, WINDOW_HEIGHT - 70, 100, 40};
+        SDL_RenderFillRect(renderer, &backButton);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &backButton);
+
+        // Draw "BACK" text with digital display
+        drawDigitalText(renderer, "BACK", backButton.x + 20, backButton.y + 10, 12, 20, 2);
     }
 
     // Present rendered frame
@@ -2370,17 +2467,8 @@ void cleanupGame(void)
 // Save high score to file
 void saveScore()
 {
-    FILE *file = fopen("highscore.txt", "w");
-    if (file != NULL)
-    {
-        fprintf(file, "%d", score);
-        fclose(file);
-        printf("Score saved: %d\n", score);
-    }
-    else
-    {
-        perror("Failed to save score");
-    }
+    // Add the current score to the leaderboard
+    addScore(score);
 }
 
 // Signal handler for clean exit
@@ -2480,6 +2568,7 @@ void resetGame()
     health = 3;
     game_time = 0;
     start_time = SDL_GetTicks();
+    game_state = STATE_PLAYING;
 
     // Clear any existing game objects
     for (int i = 0; i < MAX_FRUITS; i++)
@@ -2488,6 +2577,367 @@ void resetGame()
     }
 
     printf("Game reset! Ready to play again.\n");
+}
+
+// Load scores from file
+void loadScores()
+{
+    FILE *file = fopen("leaderboard.txt", "r");
+    if (file == NULL)
+    {
+        printf("No leaderboard file found. Starting fresh.\n");
+        return;
+    }
+
+    num_scores = 0;
+    while (num_scores < MAX_SCORES &&
+           fscanf(file, "%d,%19[^\n]\n", &leaderboard[num_scores].score, leaderboard[num_scores].date) == 2)
+    {
+        num_scores++;
+    }
+
+    fclose(file);
+    printf("Loaded %d scores from leaderboard file.\n", num_scores);
+}
+
+// Save scores to file
+void saveScores()
+{
+    FILE *file = fopen("leaderboard.txt", "w");
+    if (file == NULL)
+    {
+        perror("Failed to open leaderboard file for writing");
+        return;
+    }
+
+    for (int i = 0; i < num_scores; i++)
+    {
+        fprintf(file, "%d,%s\n", leaderboard[i].score, leaderboard[i].date);
+    }
+
+    fclose(file);
+    printf("Saved %d scores to leaderboard file.\n", num_scores);
+}
+
+// Add a score to the leaderboard
+void addScore(int new_score)
+{
+    // Get current date and time
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    char date_str[20];
+    strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M:%S", t);
+
+    // Check if the score qualifies for the leaderboard
+    if (num_scores < MAX_SCORES || new_score > leaderboard[num_scores - 1].score)
+    {
+        // Find the position to insert the new score
+        int pos = 0;
+        while (pos < num_scores && new_score <= leaderboard[pos].score)
+        {
+            pos++;
+        }
+
+        // Shift lower scores down
+        if (num_scores < MAX_SCORES)
+        {
+            num_scores++;
+        }
+
+        for (int i = num_scores - 1; i > pos; i--)
+        {
+            leaderboard[i] = leaderboard[i - 1];
+        }
+
+        // Insert the new score
+        leaderboard[pos].score = new_score;
+        strcpy(leaderboard[pos].date, date_str);
+
+        // Save the updated leaderboard
+        saveScores();
+        printf("Added score %d to leaderboard at position %d\n", new_score, pos + 1);
+    }
+    else
+    {
+        printf("Score %d did not make the leaderboard.\n", new_score);
+    }
+}
+
+// Helper function to draw a digital character
+void drawDigitalChar(SDL_Renderer *renderer, char c, int x, int y, int w, int h)
+{
+    // Segment thickness (adjust based on character size)
+    int thickness = h / 8;
+    if (thickness < 1)
+        thickness = 1;
+
+    // Define segments for digits and letters
+    bool segments[7] = {0, 0, 0, 0, 0, 0, 0}; // Default all off
+
+    // Define segments for each character
+    // Segments: 0=top, 1=top-right, 2=bottom-right, 3=bottom, 4=bottom-left, 5=top-left, 6=middle
+    if (c >= '0' && c <= '9')
+    {
+        // Digits
+        switch (c)
+        {
+        case '0':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case '1':
+            segments[1] = segments[2] = 1;
+            break;
+        case '2':
+            segments[0] = segments[1] = segments[3] = segments[4] = segments[6] = 1;
+            break;
+        case '3':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[6] = 1;
+            break;
+        case '4':
+            segments[1] = segments[2] = segments[5] = segments[6] = 1;
+            break;
+        case '5':
+            segments[0] = segments[2] = segments[3] = segments[5] = segments[6] = 1;
+            break;
+        case '6':
+            segments[0] = segments[2] = segments[3] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case '7':
+            segments[0] = segments[1] = segments[2] = 1;
+            break;
+        case '8':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case '9':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[5] = segments[6] = 1;
+            break;
+        }
+    }
+    else
+    {
+        // Letters
+        switch (c)
+        {
+        case 'A':
+            segments[0] = segments[1] = segments[2] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'B':
+            segments[2] = segments[3] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'C':
+            segments[0] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'D':
+            segments[1] = segments[2] = segments[3] = segments[4] = segments[6] = 1;
+            break;
+        case 'E':
+            segments[0] = segments[3] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'F':
+            segments[0] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'G':
+            segments[0] = segments[2] = segments[3] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'H':
+            segments[1] = segments[2] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'I':
+            segments[1] = segments[2] = 1;
+            break;
+        case 'J':
+            segments[1] = segments[2] = segments[3] = segments[4] = 1;
+            break;
+        case 'K':
+            segments[1] = segments[2] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'L':
+            segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'M':
+            segments[0] = segments[1] = segments[2] = segments[4] = segments[5] = 1;
+            break;
+        case 'N':
+            segments[0] = segments[1] = segments[2] = segments[4] = segments[5] = 1;
+            break;
+        case 'O':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'P':
+            segments[0] = segments[1] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'Q':
+            segments[0] = segments[1] = segments[2] = segments[3] = segments[5] = segments[6] = 1;
+            break;
+        case 'R':
+            segments[0] = segments[1] = segments[4] = segments[5] = 1;
+            break;
+        case 'S':
+            segments[0] = segments[2] = segments[3] = segments[5] = segments[6] = 1;
+            break;
+        case 'T':
+            segments[0] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'U':
+            segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'V':
+            segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'W':
+            segments[1] = segments[2] = segments[3] = segments[4] = segments[5] = 1;
+            break;
+        case 'X':
+            segments[1] = segments[2] = segments[4] = segments[5] = segments[6] = 1;
+            break;
+        case 'Y':
+            segments[1] = segments[2] = segments[3] = segments[5] = segments[6] = 1;
+            break;
+        case 'Z':
+            segments[0] = segments[1] = segments[3] = segments[4] = segments[6] = 1;
+            break;
+        case ':':
+        {
+            // Draw colon (special case)
+            int dotSize = h / 5;
+            SDL_Rect dot1 = {x + w / 2 - dotSize / 2, y + h / 3 - dotSize / 2, dotSize, dotSize};
+            SDL_Rect dot2 = {x + w / 2 - dotSize / 2, y + 2 * h / 3 - dotSize / 2, dotSize, dotSize};
+            SDL_RenderFillRect(renderer, &dot1);
+            SDL_RenderFillRect(renderer, &dot2);
+            return;
+        }
+        case '.':
+        {
+            // Draw period (special case)
+            SDL_Rect dot = {x + w / 2 - thickness / 2, y + h - thickness, thickness, thickness};
+            SDL_RenderFillRect(renderer, &dot);
+            return;
+        }
+        case '-':
+            // Draw hyphen (just the middle segment)
+            segments[6] = 1;
+            break;
+        case '_':
+            // Draw underscore (just the bottom segment)
+            segments[3] = 1;
+            break;
+        case ' ':
+            // Space - all segments off
+            return;
+        default:
+        {
+            // Default unknown character to a filled rectangle
+            SDL_Rect unknown = {x + w / 4, y + h / 3, w / 2, h / 3};
+            SDL_RenderFillRect(renderer, &unknown);
+            return;
+        }
+        }
+    }
+
+    // Define coordinates for each segment
+    SDL_Rect segs[7];
+
+    // Horizontal segments
+    segs[0].x = x;
+    segs[0].y = y;
+    segs[0].w = w;
+    segs[0].h = thickness;
+
+    segs[6].x = x;
+    segs[6].y = y + h / 2 - thickness / 2;
+    segs[6].w = w;
+    segs[6].h = thickness;
+
+    segs[3].x = x;
+    segs[3].y = y + h - thickness;
+    segs[3].w = w;
+    segs[3].h = thickness;
+
+    // Vertical segments
+    segs[1].x = x + w - thickness;
+    segs[1].y = y;
+    segs[1].w = thickness;
+    segs[1].h = h / 2;
+
+    segs[2].x = x + w - thickness;
+    segs[2].y = y + h / 2;
+    segs[2].w = thickness;
+    segs[2].h = h / 2;
+
+    segs[4].x = x;
+    segs[4].y = y + h / 2;
+    segs[4].w = thickness;
+    segs[4].h = h / 2;
+
+    segs[5].x = x;
+    segs[5].y = y;
+    segs[5].w = thickness;
+    segs[5].h = h / 2;
+
+    // Draw the active segments
+    for (int s = 0; s < 7; s++)
+    {
+        if (segments[s])
+        {
+            SDL_RenderFillRect(renderer, &segs[s]);
+        }
+    }
+}
+
+// Helper function to draw text using the digital display method
+void drawDigitalText(SDL_Renderer *renderer, const char *text, int x, int y, int charWidth, int charHeight, int spacing)
+{
+    int len = strlen(text);
+    for (int i = 0; i < len; i++)
+    {
+        // Convert lowercase to uppercase for consistent rendering
+        char c = text[i];
+        if (c >= 'a' && c <= 'z')
+        {
+            c = c - 'a' + 'A';
+        }
+
+        drawDigitalChar(renderer, c, x + i * (charWidth + spacing), y, charWidth, charHeight);
+    }
+}
+
+// Function to draw a string using our digital character rendering
+void drawString(SDL_Renderer *renderer, const char *str, int x, int y, int charWidth, int charHeight, int spacing)
+{
+    if (!str)
+        return;
+
+    int currentX = x;
+
+    for (int i = 0; str[i] != '\0'; i++)
+    {
+        drawDigitalChar(renderer, str[i], currentX, y, charWidth, charHeight);
+        currentX += charWidth + spacing;
+    }
+}
+
+// Function to draw centered text
+void drawCenteredString(SDL_Renderer *renderer, const char *str, int centerX, int y, int charWidth, int charHeight, int spacing)
+{
+    if (!str)
+        return;
+
+    int textWidth = (strlen(str) * charWidth) + ((strlen(str) - 1) * spacing);
+    int startX = centerX - (textWidth / 2);
+
+    drawString(renderer, str, startX, y, charWidth, charHeight, spacing);
+}
+
+// Function to draw right-aligned text
+void drawRightAlignedString(SDL_Renderer *renderer, const char *str, int rightX, int y, int charWidth, int charHeight, int spacing)
+{
+    if (!str)
+        return;
+
+    int textWidth = (strlen(str) * charWidth) + ((strlen(str) - 1) * spacing);
+    int startX = rightX - textWidth;
+
+    drawString(renderer, str, startX, y, charWidth, charHeight, spacing);
 }
 
 int main()
@@ -2518,53 +2968,12 @@ int main()
         // Render game
         renderGame();
 
-        // Handle game over state and possible restart
-        if (health <= 0)
-        {
-            // Check for a click on the "Play Again" button
-            SDL_Event e;
-            while (SDL_PollEvent(&e))
-            {
-                if (e.type == SDL_QUIT)
-                {
-                    running = 0;
-                    break;
-                }
-                else if (e.type == SDL_MOUSEBUTTONDOWN)
-                {
-                    int mouseX = e.button.x;
-                    int mouseY = e.button.y;
-
-                    // Check if the click is on the "Play Again" button
-                    SDL_Rect playAgainButton = {WINDOW_WIDTH / 2 - 70, WINDOW_HEIGHT / 2 + 40, 140, 40};
-                    if (mouseX >= playAgainButton.x && mouseX <= playAgainButton.x + playAgainButton.w &&
-                        mouseY >= playAgainButton.y && mouseY <= playAgainButton.y + playAgainButton.h)
-                    {
-                        // Reset the game
-                        resetGame();
-                        break;
-                    }
-                }
-                else if (e.type == SDL_KEYDOWN)
-                {
-                    if (e.key.keysym.sym == SDLK_r)
-                    {
-                        // Reset the game when 'R' is pressed
-                        resetGame();
-                        break;
-                    }
-                    else if (e.key.keysym.sym == SDLK_ESCAPE)
-                    {
-                        running = 0;
-                        break;
-                    }
-                }
-            }
-        }
-
         // Cap to ~60 FPS
         SDL_Delay(16);
     }
+
+    // Save score before cleanup
+    saveScore();
 
     // Cleanup resources
     cleanupGame();
