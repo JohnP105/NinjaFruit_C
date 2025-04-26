@@ -1196,8 +1196,8 @@ void *spawnObjects(void *arg)
         // Unlock mutex
         pthread_mutex_unlock(&game_mutex);
 
-        // Sleep to control spawn rate (reduce a bit to make spawning more responsive)
-        usleep(40000); // 40ms instead of 50ms
+        // Sleep to control spawn rate (increased to slow down spawn rate)
+        usleep(100000); // 100ms instead of 40ms
     }
 
     return NULL;
