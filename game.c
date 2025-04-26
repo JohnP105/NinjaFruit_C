@@ -1439,7 +1439,6 @@ int checkCollision(float slice_x, float slice_y, GameObject *obj)
 void handleEvents()
 {
     SDL_Event e;
-    static int prev_prev_mouse_x = 0, prev_prev_mouse_y = 0; // Store previous-previous mouse position for better line detection
 
     while (SDL_PollEvent(&e))
     {
@@ -1450,8 +1449,6 @@ void handleEvents()
         else if (e.type == SDL_MOUSEMOTION)
         {
             // Store previous position before updating current
-            prev_prev_mouse_x = prev_mouse_x;
-            prev_prev_mouse_y = prev_mouse_y;
             prev_mouse_x = mouse_x;
             prev_mouse_y = mouse_y;
 
@@ -1896,10 +1893,6 @@ void renderGame()
 
     // Draw score text
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-    // Draw "SCORE:" label
-    int scoreTextX = 20;
-    int scoreTextY = 20;
 
     // Display score number (simplistic digital-style)
     char scoreStr[20];
