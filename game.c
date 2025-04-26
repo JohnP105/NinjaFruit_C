@@ -1303,8 +1303,8 @@ void handleEvents()
                                         health = 0; // Ensure health doesn't go below 0
                                         // Will handle game over in main loop
                                     }
-                                    score -= 10;
-                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
+                                    // No score penalty for bombs
+                                    printf("Bomb sliced! Health: %d\n", health);
                                 }
                                 else
                                 {
@@ -1372,8 +1372,8 @@ void handleEvents()
                                         health = 0; // Ensure health doesn't go below 0
                                         // Will handle game over in main loop
                                     }
-                                    score -= 10;
-                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
+                                    // No score penalty for bombs
+                                    printf("Bomb sliced! Health: %d\n", health);
                                 }
                                 else
                                 {
@@ -1443,8 +1443,8 @@ void handleEvents()
                                         health = 0; // Ensure health doesn't go below 0
                                         // Will handle game over in main loop
                                     }
-                                    score -= 10;
-                                    printf("Bomb sliced! Score: %d, Health: %d\n", score, health);
+                                    // No score penalty for bombs
+                                    printf("Bomb sliced! Health: %d\n", health);
                                 }
                                 else
                                 {
