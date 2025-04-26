@@ -688,15 +688,22 @@ void *spawnObjects(void *arg)
     // Avoid unused parameter warning
     (void)arg;
 
+    // Initialize random seed
+    srand(time(NULL));
+
     // Variables for controlling spawn patterns
     int spawn_mode = 0; // 0 = regular, 1 = cluster, 2 = line, 3 = arc
     int spawn_timer = 0;
     int spawn_cooldown = 0;
+    int last_spawn_time = 0; // Track when we last spawned something
 
     while (running)
     {
         // Lock mutex before modifying shared data
         pthread_mutex_lock(&game_mutex);
+
+        // Get current time
+        int current_time = SDL_GetTicks() / 1000;
 
         // Decrease spawn cooldown
         if (spawn_cooldown > 0)
@@ -709,26 +716,53 @@ void *spawnObjects(void *arg)
         if (spawn_timer > 200)
         { // About every 10 seconds
             spawn_timer = 0;
+            int prev_mode = spawn_mode;
             spawn_mode = rand() % 4; // Select a random spawn pattern
             printf("Spawn mode changed to: %d\n", spawn_mode);
-        }
 
-        // Regular single fruit spawning
-        if (spawn_cooldown <= 0)
-        {
-            // Count active fruits
-            int active_count = 0;
-            for (int i = 0; i < MAX_FRUITS; i++)
+            // If we're changing modes and there are few active fruits, force a spawn in the new mode
+            if (prev_mode != spawn_mode)
             {
-                if (gameObjects[i].active)
+                // Count active fruits
+                int active_count = 0;
+                for (int i = 0; i < MAX_FRUITS; i++)
                 {
-                    active_count++;
+                    if (gameObjects[i].active)
+                    {
+                        active_count++;
+                    }
+                }
+
+                // If we have less than 3 active fruits, force an immediate spawn
+                if (active_count < 3)
+                {
+                    spawn_cooldown = 0;  // Reset cooldown to allow immediate spawn
+                    last_spawn_time = 0; // Reset last spawn time to force spawn
                 }
             }
+        }
 
+        // Count active fruits
+        int active_count = 0;
+        for (int i = 0; i < MAX_FRUITS; i++)
+        {
+            if (gameObjects[i].active)
+            {
+                active_count++;
+            }
+        }
+
+        // Check if we need an emergency spawn - if no active fruits or it's been too long
+        bool need_emergency_spawn = (active_count == 0 || (current_time - last_spawn_time > 2));
+
+        // Regular fruit spawning when cooldown is over
+        if (spawn_cooldown <= 0 || need_emergency_spawn)
+        {
             // Only spawn if we're below the limit
             if (active_count < MAX_FRUITS - 3) // Leave room for clusters
             {
+                bool spawned_something = false;
+
                 if (spawn_mode == 0) // Regular spawning
                 {
                     // Find an inactive object slot
@@ -737,10 +771,12 @@ void *spawnObjects(void *arg)
                         if (!gameObjects[i].active)
                         {
                             // Random chance to spawn - reduced spawn rate
-                            if (rand() % 40 == 0) // Was 20, now 40 (half as frequent)
+                            if (need_emergency_spawn || rand() % 20 == 0) // Was 40, now 20 (more frequent)
                             {
                                 spawnFruit(i);
-                                spawn_cooldown = 5; // Increased cooldown (was 3)
+                                spawn_cooldown = 3; // Reduced cooldown (was 5)
+                                spawned_something = true;
+                                last_spawn_time = current_time;
                                 break;
                             }
                         }
@@ -749,7 +785,7 @@ void *spawnObjects(void *arg)
                 else if (spawn_mode == 1 && active_count < MAX_FRUITS - 5) // Cluster spawning
                 {
                     // Spawn a cluster of 3-5 fruits close together - less frequently
-                    if (rand() % 70 == 0) // Was 40, now 70 (less frequent)
+                    if (need_emergency_spawn || rand() % 40 == 0) // Was 70, now 40 (more frequent)
                     {
                         int cluster_size = 3 + rand() % 3; // 3-5 fruits
                         int base_x = 100 + rand() % (WINDOW_WIDTH - 200);
@@ -769,13 +805,15 @@ void *spawnObjects(void *arg)
                                 spawned++;
                             }
                         }
-                        spawn_cooldown = 70; // Increased cooldown (was 50)
+                        spawn_cooldown = 40; // Reduced cooldown (was 70)
+                        spawned_something = true;
+                        last_spawn_time = current_time;
                     }
                 }
                 else if (spawn_mode == 2) // Line formation
                 {
                     // Spawn fruits in a horizontal line for slicing swipes - less frequently
-                    if (rand() % 80 == 0) // Was 50, now 80 (less frequent)
+                    if (need_emergency_spawn || rand() % 50 == 0) // Was 80, now 50 (more frequent)
                     {
                         int line_count = 4 + rand() % 3; // 4-6 fruits
                         int spacing = FRUIT_SIZE + 10;
@@ -797,13 +835,15 @@ void *spawnObjects(void *arg)
                                 spawned++;
                             }
                         }
-                        spawn_cooldown = 90; // Increased cooldown (was 60)
+                        spawn_cooldown = 50; // Reduced cooldown (was 90)
+                        spawned_something = true;
+                        last_spawn_time = current_time;
                     }
                 }
                 else if (spawn_mode == 3) // Arc formation
                 {
                     // Spawn fruits in an arc pattern - less frequently
-                    if (rand() % 100 == 0) // Was 60, now 100 (less frequent)
+                    if (need_emergency_spawn || rand() % 60 == 0) // Was 100, now 60 (more frequent)
                     {
                         int arc_count = 5 + rand() % 3; // 5-7 fruits
                         float arc_radius = 100.0f + rand() % 50;
@@ -828,7 +868,24 @@ void *spawnObjects(void *arg)
                                 spawned++;
                             }
                         }
-                        spawn_cooldown = 110; // Increased cooldown (was 70)
+                        spawn_cooldown = 60; // Reduced cooldown (was 110)
+                        spawned_something = true;
+                        last_spawn_time = current_time;
+                    }
+                }
+
+                // Emergency spawn if nothing was spawned and we need to
+                if (need_emergency_spawn && !spawned_something && active_count == 0)
+                {
+                    // Guaranteed spawn at least one fruit
+                    for (int i = 0; i < MAX_FRUITS; i++)
+                    {
+                        if (!gameObjects[i].active)
+                        {
+                            spawnFruit(i);
+                            last_spawn_time = current_time;
+                            break;
+                        }
                     }
                 }
             }
@@ -837,8 +894,8 @@ void *spawnObjects(void *arg)
         // Unlock mutex
         pthread_mutex_unlock(&game_mutex);
 
-        // Sleep to control spawn rate
-        usleep(50000); // 50ms
+        // Sleep to control spawn rate (reduce a bit to make spawning more responsive)
+        usleep(40000); // 40ms instead of 50ms
     }
 
     return NULL;
