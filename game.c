@@ -22,6 +22,10 @@
 #define BOMB_CHANCE 5 // 1 in 10 chance of spawning a bomb
 #define FRUIT_SIZE 64
 
+// Deadlock detection constants
+#define MAX_RESOURCES 4
+#define MAX_PROCESSES 4
+
 // Slicing animation constants
 #define SLICE_PIECES 2
 #define SLICE_DURATION 30 // frames
@@ -60,6 +64,20 @@ typedef struct
     SlicePiece pieces[SLICE_PIECES]; // Pieces when sliced
 } GameObject;
 
+// Deadlock detection structures
+typedef struct
+{
+    int allocation[MAX_PROCESSES][MAX_RESOURCES];
+    int max_claim[MAX_PROCESSES][MAX_RESOURCES];
+    int available[MAX_RESOURCES];
+    int request[MAX_PROCESSES][MAX_RESOURCES];
+    int work[MAX_RESOURCES];
+    int finish[MAX_PROCESSES];
+    int safe_sequence[MAX_PROCESSES];
+    pthread_mutex_t deadlock_mutex;
+    int deadlock_check_active;
+} DeadlockDetector;
+
 // Global variables
 GameObject gameObjects[MAX_FRUITS];
 pthread_mutex_t game_mutex;
@@ -69,6 +87,12 @@ int game_time = 0;     // Game timer in seconds
 Uint32 start_time = 0; // Start time in milliseconds
 int running = 1;
 int spawn_pipe[2]; // Pipe for communicating with spawn process
+
+// Deadlock detection globals
+DeadlockDetector deadlock_detector;
+pthread_t deadlock_thread;
+int resources_held[MAX_RESOURCES] = {0};
+int resource_request_probability = 15; // 1 in 15 chance of resource request
 
 // SDL related variables
 SDL_Window *window = NULL;
@@ -102,6 +126,247 @@ int lineCircleIntersect(float line_x1, float line_y1, float line_x2, float line_
 void spawnFruit(int index);
 void spawnFruitAt(int index, float x, float y, float vx, float vy);
 void resetGame();
+
+// Initialize deadlock detector
+void initDeadlockDetector()
+{
+    memset(&deadlock_detector, 0, sizeof(DeadlockDetector));
+    pthread_mutex_init(&deadlock_detector.deadlock_mutex, NULL);
+
+    // Initialize available resources
+    for (int i = 0; i < MAX_RESOURCES; i++)
+    {
+        deadlock_detector.available[i] = 3 + rand() % 3; // 3-5 of each resource
+    }
+
+    // Initialize max claims for each process
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        for (int j = 0; j < MAX_RESOURCES; j++)
+        {
+            deadlock_detector.max_claim[i][j] = rand() % 3; // 0-2 of each resource
+        }
+    }
+
+    deadlock_detector.deadlock_check_active = 0;
+}
+
+// Clean up deadlock detector resources
+void cleanupDeadlockDetector()
+{
+    pthread_mutex_destroy(&deadlock_detector.deadlock_mutex);
+}
+
+// Resource allocation function
+int requestResource(int process_id, int resource_id, int amount)
+{
+    pthread_mutex_lock(&deadlock_detector.deadlock_mutex);
+
+    // Check if the request exceeds max claim
+    if (deadlock_detector.allocation[process_id][resource_id] + amount >
+        deadlock_detector.max_claim[process_id][resource_id])
+    {
+        pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+        return -1; // Request exceeds maximum claim
+    }
+
+    // Check if enough resources are available
+    if (amount > deadlock_detector.available[resource_id])
+    {
+        // Record the request
+        deadlock_detector.request[process_id][resource_id] = amount;
+        pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+        return 0; // Resource not available, process must wait
+    }
+
+    // Allocate the resource
+    deadlock_detector.allocation[process_id][resource_id] += amount;
+    deadlock_detector.available[resource_id] -= amount;
+    deadlock_detector.request[process_id][resource_id] = 0;
+
+    pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+    return 1; // Resource allocated successfully
+}
+
+// Release allocated resources
+void releaseResource(int process_id, int resource_id, int amount)
+{
+    pthread_mutex_lock(&deadlock_detector.deadlock_mutex);
+
+    if (deadlock_detector.allocation[process_id][resource_id] < amount)
+    {
+        // This shouldn't happen in a correct implementation
+        printf("Warning: Trying to release more resources than allocated\n");
+        amount = deadlock_detector.allocation[process_id][resource_id];
+    }
+
+    deadlock_detector.allocation[process_id][resource_id] -= amount;
+    deadlock_detector.available[resource_id] += amount;
+
+    pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+}
+
+// Deadlock detection algorithm (Banker's algorithm)
+int detectDeadlock()
+{
+    pthread_mutex_lock(&deadlock_detector.deadlock_mutex);
+
+    // If detection is already running, don't start another
+    if (deadlock_detector.deadlock_check_active)
+    {
+        pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+        return -1;
+    }
+
+    deadlock_detector.deadlock_check_active = 1;
+
+    // Initialize work and finish arrays
+    for (int i = 0; i < MAX_RESOURCES; i++)
+    {
+        deadlock_detector.work[i] = deadlock_detector.available[i];
+    }
+
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        deadlock_detector.finish[i] = 0;
+    }
+
+    // Find an unfinished process whose needs can be satisfied
+    int found;
+    int deadlock_detected = 0;
+    int safe_index = 0;
+
+    do
+    {
+        found = 0;
+        for (int i = 0; i < MAX_PROCESSES; i++)
+        {
+            if (deadlock_detector.finish[i] == 0)
+            {
+                int j;
+                for (j = 0; j < MAX_RESOURCES; j++)
+                {
+                    if (deadlock_detector.max_claim[i][j] - deadlock_detector.allocation[i][j] >
+                        deadlock_detector.work[j])
+                    {
+                        break;
+                    }
+                }
+
+                if (j == MAX_RESOURCES)
+                {
+                    // This process can finish
+                    for (int k = 0; k < MAX_RESOURCES; k++)
+                    {
+                        deadlock_detector.work[k] += deadlock_detector.allocation[i][k];
+                    }
+                    deadlock_detector.finish[i] = 1;
+                    deadlock_detector.safe_sequence[safe_index++] = i;
+                    found = 1;
+                }
+            }
+        }
+    } while (found);
+
+    // Check if all processes are finished
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (deadlock_detector.finish[i] == 0)
+        {
+            deadlock_detected = 1;
+            break;
+        }
+    }
+
+    deadlock_detector.deadlock_check_active = 0;
+    pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+
+    return deadlock_detected;
+}
+
+// Deadlock recovery function
+void recoverFromDeadlock()
+{
+    pthread_mutex_lock(&deadlock_detector.deadlock_mutex);
+
+    printf("Deadlock detected! Recovering...\n");
+
+    // Simple recovery: release some resources from a deadlocked process
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (deadlock_detector.finish[i] == 0)
+        {
+            for (int j = 0; j < MAX_RESOURCES; j++)
+            {
+                if (deadlock_detector.allocation[i][j] > 0)
+                {
+                    // Release one resource
+                    deadlock_detector.allocation[i][j]--;
+                    deadlock_detector.available[j]++;
+                    printf("Released resource %d from process %d\n", j, i);
+                    break;
+                }
+            }
+            break; // Only recover from one process at a time
+        }
+    }
+
+    pthread_mutex_unlock(&deadlock_detector.deadlock_mutex);
+}
+
+// Deadlock thread function
+void *deadlockMonitor(void *arg)
+{
+    (void)arg; // Unused parameter
+
+    while (running)
+    {
+        // Simulate resource requests at random intervals
+        if (rand() % resource_request_probability == 0)
+        {
+            int process_id = rand() % MAX_PROCESSES;
+            int resource_id = rand() % MAX_RESOURCES;
+            int amount = 1 + rand() % 2; // Request 1-2 resources
+
+            int result = requestResource(process_id, resource_id, amount);
+            if (result == 1)
+            {
+                printf("Process %d acquired %d of resource %d\n",
+                       process_id, amount, resource_id);
+            }
+        }
+
+        // Simulate resource releases at random intervals
+        if (rand() % (resource_request_probability * 2) == 0)
+        {
+            int process_id = rand() % MAX_PROCESSES;
+            int resource_id = rand() % MAX_RESOURCES;
+
+            if (deadlock_detector.allocation[process_id][resource_id] > 0)
+            {
+                int amount = 1;
+                releaseResource(process_id, resource_id, amount);
+                printf("Process %d released %d of resource %d\n",
+                       process_id, amount, resource_id);
+            }
+        }
+
+        // Run deadlock detection periodically
+        if (rand() % (resource_request_probability * 3) == 0)
+        {
+            int deadlock = detectDeadlock();
+            if (deadlock == 1)
+            {
+                recoverFromDeadlock();
+            }
+        }
+
+        // Sleep to prevent excessive CPU usage
+        usleep(100000); // 100ms
+    }
+
+    return NULL;
+}
 
 // Draw fruit function - renders different types of fruits/bombs
 void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
@@ -679,7 +944,17 @@ int initGame(void)
     // Play background music
     Mix_PlayMusic(backgroundMusic, -1);
 
-    return 1;
+    // Initialize deadlock detection system
+    initDeadlockDetector();
+
+    // Create deadlock monitoring thread
+    if (pthread_create(&deadlock_thread, NULL, deadlockMonitor, NULL) != 0)
+    {
+        fprintf(stderr, "Failed to create deadlock monitoring thread\n");
+        return 0;
+    }
+
+    return 1; // Success
 }
 
 // Spawn objects thread function
@@ -2081,6 +2356,13 @@ void cleanupGame(void)
     // Close pipe
     close(spawn_pipe[0]);
     close(spawn_pipe[1]);
+
+    // Cancel deadlock thread
+    pthread_cancel(deadlock_thread);
+    pthread_join(deadlock_thread, NULL);
+
+    // Clean up deadlock detector resources
+    cleanupDeadlockDetector();
 
     printf("Game cleaned up successfully\n");
 }
