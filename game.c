@@ -1635,47 +1635,67 @@ void renderGame()
     char timeStr[10];
     sprintf(timeStr, "%02d:%02d", minutes, seconds);
 
-    // Simple rendering of the time
+    // Improved timer rendering with better digital display
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    int timeX = WINDOW_WIDTH / 2 - 28;
+    int timeX = WINDOW_WIDTH / 2 - 30;
     int timeY = 22;
+    int timerDigitWidth = 10; // Renamed from digitWidth to avoid redefinition
+    int digitHeight = 16;
+    int segmentThickness = 2;
 
-    // Just a simplified time display
+    // Draw each character in the time string with improved digital segments
     for (int i = 0; timeStr[i] != '\0'; i++)
     {
         if (timeStr[i] == ':')
         {
-            // Draw colon
-            SDL_Rect colon1 = {timeX + i * 10, timeY + 5, 2, 2};
-            SDL_Rect colon2 = {timeX + i * 10, timeY + 12, 2, 2};
+            // Draw colon with larger dots
+            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + 2), timeY + 4, 3, 3};
+            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + 2), timeY + 10, 3, 3};
             SDL_RenderFillRect(renderer, &colon1);
             SDL_RenderFillRect(renderer, &colon2);
         }
         else
         {
-            // It's a digit, draw a minimal digit representation
+            // Convert character to digit
             int digit = timeStr[i] - '0';
+            int x = timeX + i * (timerDigitWidth + 2);
+            int y = timeY;
 
-            // Simple rendering - just a number shape
-            // Will use rectangles to create a simple digit form
-            switch (digit)
+            // Arrays to define which segments are on for each digit (7-segment display)
+            // Segments: 0=top, 1=top-right, 2=bottom-right, 3=bottom, 4=bottom-left, 5=top-left, 6=middle
+            bool segments[10][7] = {
+                {1, 1, 1, 1, 1, 1, 0}, // 0
+                {0, 1, 1, 0, 0, 0, 0}, // 1
+                {1, 1, 0, 1, 1, 0, 1}, // 2
+                {1, 1, 1, 1, 0, 0, 1}, // 3
+                {0, 1, 1, 0, 0, 1, 1}, // 4
+                {1, 0, 1, 1, 0, 1, 1}, // 5
+                {1, 0, 1, 1, 1, 1, 1}, // 6
+                {1, 1, 1, 0, 0, 0, 0}, // 7
+                {1, 1, 1, 1, 1, 1, 1}, // 8
+                {1, 1, 1, 1, 0, 1, 1}  // 9
+            };
+
+            // Define coordinates for each segment
+            SDL_Rect segs[7];
+
+            // Horizontal segments (top, middle, bottom)
+            segs[0] = (SDL_Rect){x, y, timerDigitWidth, segmentThickness};                                  // Top
+            segs[6] = (SDL_Rect){x, y + digitHeight / 2, timerDigitWidth, segmentThickness};                // Middle
+            segs[3] = (SDL_Rect){x, y + digitHeight - segmentThickness, timerDigitWidth, segmentThickness}; // Bottom
+
+            // Vertical segments (top-right, bottom-right, bottom-left, top-left)
+            segs[1] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y, segmentThickness, digitHeight / 2};                   // Top-right
+            segs[2] = (SDL_Rect){x + timerDigitWidth - segmentThickness, y + digitHeight / 2, segmentThickness, digitHeight / 2}; // Bottom-right
+            segs[4] = (SDL_Rect){x, y + digitHeight / 2, segmentThickness, digitHeight / 2};                                      // Bottom-left
+            segs[5] = (SDL_Rect){x, y, segmentThickness, digitHeight / 2};                                                        // Top-left
+
+            // Draw the active segments for this digit
+            for (int s = 0; s < 7; s++)
             {
-            case 0:
-                SDL_Rect zero = {timeX + i * 10, timeY, 6, 16};
-                SDL_RenderDrawRect(renderer, &zero);
-                break;
-            case 1:
-                SDL_RenderDrawLine(renderer, timeX + i * 10 + 3, timeY, timeX + i * 10 + 3, timeY + 16);
-                break;
-            default:
-                SDL_Rect defaultDigit = {timeX + i * 10, timeY, 6, 16};
-                SDL_RenderDrawRect(renderer, &defaultDigit);
-
-                // Middle line for most digits
-                if (digit != 1 && digit != 7)
+                if (segments[digit][s])
                 {
-                    SDL_RenderDrawLine(renderer, timeX + i * 10, timeY + 8,
-                                       timeX + i * 10 + 6, timeY + 8);
+                    SDL_RenderFillRect(renderer, &segs[s]);
                 }
             }
         }
@@ -1929,8 +1949,9 @@ void renderGame()
         // Draw final score
         char finalScoreStr[40];
         sprintf(finalScoreStr, "Final Score: %d", score);
-        int finalScoreX = WINDOW_WIDTH / 2 - 60;
-        int finalScoreY = WINDOW_HEIGHT / 2;
+
+        // Draw score text in the game over box
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
         // Simplified rendering of "GAME OVER"
         SDL_Rect gameOver = {gameOverX, gameOverY, 140, 30};
