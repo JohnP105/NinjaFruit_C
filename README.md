@@ -1,11 +1,11 @@
-# NinjaFruit Game in C with SDL
+# 🍊 NinjaFruit Game in C with SDL
 
-## Demo Video
+## 🎮 Demo Video
 
 - April 18: https://www.youtube.com/watch?v=A7UfwjHtHrE
 - April 28: https://www.youtube.com/watch?v=HXFGfjR5fH0
 
-## Setup
+## 🚀 Setup
 
 ```bash
 # Compile the game
@@ -33,9 +33,9 @@ brew install sdl2 sdl2_image sdl2_mixer
 sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev
 ```
 
-## Game Overview
+## 📖 Game Overview
 
-### Game Title: NinjaFruit
+### Game Title: 🍊 NinjaFruit
 
 ### Game Summary
 
@@ -47,7 +47,7 @@ What sets NinjaFruit apart is its tight integration of Operating System concepts
 
 Fruits and bombs spawn from the top of the screen in random patterns. The player slices fruits with mouse movements to gain points while avoiding bombs that reduce health. Power-ups occasionally appear to provide special abilities. The challenge increases as the player progresses, with faster and more numerous objects appearing on screen.
 
-## Gameplay Mechanics
+## 🎯 Gameplay Mechanics
 
 ### Controls
 
@@ -56,10 +56,10 @@ Fruits and bombs spawn from the top of the screen in random patterns. The player
 
 ### Core Mechanics
 
-- **Fruit Slicing**: Drag the mouse across fruits to slice them and earn points
-- **Bomb Avoidance**: Avoid slicing bombs or lose health (no score penalty)
-- **Power-ups**: Special items that provide temporary abilities (managed by a child process)
-- **Score System**: Points increase with fruit slices
+- 🍎 **Fruit Slicing**: Drag the mouse across fruits to slice them and earn points
+- 💣 **Bomb Avoidance**: Avoid slicing bombs or lose health (no score penalty)
+- ⚡ **Power-ups**: Special items that provide temporary abilities (managed by a child process)
+- 🏆 **Score System**: Points increase with fruit slices
 
 ### Level Progression
 
@@ -70,11 +70,11 @@ The game features progressive difficulty, with increasing speed and frequency of
 - **Loss**: The game ends when the player's health drops to zero
 - **Win**: The goal is to achieve the highest score possible
 
-## Technical Implementation
+## 💻 Technical Implementation
 
-### OS Concepts Demonstrated
+### 🔧 OS CONCEPTS DEMONSTRATED
 
-1. **Threading**
+### 1. 🧵 **Threading**
 
 ```bash
 pthread_t spawnerThread;
@@ -84,7 +84,7 @@ pthread_create(&spawnerThread, NULL, spawnObjects, NULL);
 - A separate thread handles fruit spawning (pthread_create)
 - Thread synchronization with mutex locks (pthread_mutex_lock/unlock)
 
-2. **Process Creation**
+### 2. 🔄 **Process Creation**
 
 ```bash
 void processSpawner()
@@ -101,7 +101,7 @@ void processSpawner()
 - Fork() to create a child process for power-ups
 - Wait() for child process termination
 
-3. **Inter-Process Communication**
+### 3. 📡 **Inter-Process Communication**
 
 ```bash
 int pipefd[2];
@@ -125,7 +125,7 @@ if (pid == 0) {
 - Pipe for communication between parent and child processes
 - Non-blocking I/O for pipe reading
 
-4. **Signal Handling**
+### 4. 🛑 **Signal Handling**
 
 ```bash
 // Signal handler for clean exit
@@ -145,7 +145,7 @@ void signalHandler(int sig)
 - SIGINT handler for clean termination
 - File I/O for high score persistence
 
-5. **Deadlock Detection and Handling**
+### 5. 🔒 **Deadlock Detection and Handling**
 
 ```bash
 // Deadlock detection algorithm (Banker's algorithm)
@@ -182,14 +182,14 @@ The game uses the following assets:
   - Explosion sound when cutting bombs
   - Background music
 
-## Future Improvements
+## 🔮 Future Improvements
 
 - Add more varieties of fruits and obstacles
 - Implement additional power-up types
 - Add a combo system for slicing multiple fruits at once
 - Enhance visual effects for slicing
-- Improve mouse spicing feature so user can slice in every angle
+- Improve mouse slicing feature so user can slice in every angle
 
 ### NinjaFruit Gameplay Screenshot
 
-<img width="1141" alt="NinjaFruit Gameplay" src="./assets/gameplay.png" />
+![NinjaFruit Gameplay](./assets/gameplay.png)
