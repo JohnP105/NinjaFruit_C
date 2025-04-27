@@ -1901,7 +1901,8 @@ void renderGame()
 
     // Calculate position to center score in its box
     int scoreDigits = strlen(scoreStr);
-    int totalScoreWidth = scoreDigits * digitWidth + (scoreDigits - 1) * 2; // Width plus spacing
+    int digitSpacing = 4; // Increased spacing between digits (was 2)
+    int totalScoreWidth = scoreDigits * digitWidth + (scoreDigits - 1) * digitSpacing;
     int digitX = scoreRect.x + (scoreRect.w - totalScoreWidth) / 2;
     int digitY = scoreRect.y + (scoreRect.h - 18) / 2; // Center vertically (18 is digit height)
 
@@ -1920,7 +1921,7 @@ void renderGame()
         // Initialize segments to off position
         for (int s = 0; s < 7; s++)
         {
-            segments[s].x = digitX + i * digitWidth;
+            segments[s].x = digitX + i * (digitWidth + digitSpacing);
             segments[s].y = digitY;
             segments[s].w = 8;
             segments[s].h = 2;
@@ -1932,22 +1933,22 @@ void renderGame()
         segments[6].y = digitY + 16; // Bottom
 
         // Vertical segments
-        segments[1].x = digitX + i * digitWidth + 8; // Top right
+        segments[1].x = digitX + i * (digitWidth + digitSpacing) + 8; // Top right
         segments[1].y = digitY;
         segments[1].w = 2;
         segments[1].h = 8;
 
-        segments[2].x = digitX + i * digitWidth + 8; // Bottom right
+        segments[2].x = digitX + i * (digitWidth + digitSpacing) + 8; // Bottom right
         segments[2].y = digitY + 8;
         segments[2].w = 2;
         segments[2].h = 8;
 
-        segments[4].x = digitX + i * digitWidth; // Top left
+        segments[4].x = digitX + i * (digitWidth + digitSpacing); // Top left
         segments[4].y = digitY;
         segments[4].w = 2;
         segments[4].h = 8;
 
-        segments[5].x = digitX + i * digitWidth; // Bottom left
+        segments[5].x = digitX + i * (digitWidth + digitSpacing); // Bottom left
         segments[5].y = digitY + 8;
         segments[5].w = 2;
         segments[5].h = 8;
@@ -1999,11 +2000,12 @@ void renderGame()
 
     // Calculate position to center timer text
     int timerDigitWidth = 10; // Increased for better visibility
-    int digitHeight = 24;     // Increased for better visibility
+    int digitHeight = 30;     // Increased for better visibility
     int segmentThickness = 3; // Thicker segments
 
     // Calculate width of timer text (5 characters plus spacing)
-    int timerTextWidth = 5 * timerDigitWidth + 4 * 2; // 5 chars (MM:SS) with 2px spacing between each
+    int timerSpacing = 4;                                        // Increased spacing between digits (was 2)
+    int timerTextWidth = 5 * timerDigitWidth + 4 * timerSpacing; // 5 chars (MM:SS) with 4px spacing between each
     int timeX = WINDOW_WIDTH / 2 - timerTextWidth / 2;
     int timeY = timerRect.y + (timerRect.h - digitHeight) / 2; // Center vertically
 
@@ -2016,8 +2018,8 @@ void renderGame()
             int dotSize = digitHeight / 5;
             int dotY1 = timeY + digitHeight / 3 - dotSize / 2;
             int dotY2 = timeY + 2 * digitHeight / 3 - dotSize / 2;
-            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + 2), dotY1, dotSize, dotSize};
-            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + 2), dotY2, dotSize, dotSize};
+            SDL_Rect colon1 = {timeX + i * (timerDigitWidth + timerSpacing), dotY1, dotSize, dotSize};
+            SDL_Rect colon2 = {timeX + i * (timerDigitWidth + timerSpacing), dotY2, dotSize, dotSize};
             SDL_RenderFillRect(renderer, &colon1);
             SDL_RenderFillRect(renderer, &colon2);
         }
@@ -2025,7 +2027,7 @@ void renderGame()
         {
             // Convert character to digit
             int digit = timeStr[i] - '0';
-            int x = timeX + i * (timerDigitWidth + 2);
+            int x = timeX + i * (timerDigitWidth + timerSpacing);
             int y = timeY;
 
             // Arrays to define which segments are on for each digit (7-segment display)
@@ -2077,12 +2079,12 @@ void renderGame()
     // ===== Draw Health Hearts in top-right =====
     // Health background
     SDL_SetRenderDrawColor(renderer, 30, 30, 60, 180);
-    SDL_Rect healthRect = {WINDOW_WIDTH - 130, 10, 120, 50}; // Increased height to match timer
+    SDL_Rect healthRect = {WINDOW_WIDTH - 150, 10, 140, 40}; // Updated to match scoreRect dimensions
     SDL_RenderFillRect(renderer, &healthRect);
 
     // Health border
     SDL_SetRenderDrawColor(renderer, 200, 100, 100, 255);
-    SDL_Rect healthBorder = {WINDOW_WIDTH - 130, 10, 120, 50}; // Increased height to match timer
+    SDL_Rect healthBorder = {WINDOW_WIDTH - 150, 10, 140, 40}; // Updated to match scoreRect dimensions
     SDL_RenderDrawRect(renderer, &healthBorder);
 
     // Draw hearts
@@ -2090,7 +2092,7 @@ void renderGame()
     int heartWidth = 16;   // Approximate width of a heart
     int heartSpacing = 25; // Space between hearts
     int totalHeartsWidth = (3 * heartWidth) + (2 * heartSpacing);
-    int startX = healthRect.x + (healthRect.w - totalHeartsWidth) / 2;
+    int startX = healthRect.x + (healthRect.w - totalHeartsWidth) / 2 + 7; // Center hearts horizontally
 
     for (int i = 0; i < 3; i++)
     {
