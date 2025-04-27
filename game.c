@@ -868,79 +868,72 @@ int initGame(void)
     if (background_texture == NULL)
     {
         printf("Background texture could not be created! SDL Error: %s\n", SDL_GetError());
-        // Create a simple colored background
-        background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                               SDL_TEXTUREACCESS_TARGET, WINDOW_WIDTH, WINDOW_HEIGHT);
+        // Continue without background
+    }
+    else
+    {
+        // Set render target to the background texture
+        SDL_SetRenderTarget(renderer, background_texture);
 
-        if (background_texture == NULL)
+        // Fill with deep space gradient
+        for (int y = 0; y < WINDOW_HEIGHT; y++)
         {
-            printf("Could not create fallback background texture! SDL Error: %s\n", SDL_GetError());
-            // Continue without background
+            // Gradient from deep space black/purple to slightly blue
+            float gradientFactor = (float)y / WINDOW_HEIGHT;
+            Uint8 r = 5 + (int)(10 * (1.0 - gradientFactor));
+            Uint8 g = 0 + (int)(5 * (1.0 - gradientFactor));
+            Uint8 b = 20 + (int)(40 * (1.0 - gradientFactor));
+
+            SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+            SDL_RenderDrawLine(renderer, 0, y, WINDOW_WIDTH, y);
         }
-        else
+
+        // Draw distant stars - more of them for a rich space background
+        srand(time(NULL));
+        for (int i = 0; i < 500; i++)
         {
-            // Set render target to the background texture
-            SDL_SetRenderTarget(renderer, background_texture);
+            int x = rand() % WINDOW_WIDTH;
+            int y = rand() % WINDOW_HEIGHT;
+            int brightness = 150 + rand() % 106;  // 150-255
+            int size = rand() % 100 > 95 ? 2 : 1; // Mostly small stars, some larger
 
-            // Fill with dark blue gradient (night sky)
-            for (int y = 0; y < WINDOW_HEIGHT; y++)
-            {
-                // Gradient from dark blue to slightly lighter blue
-                float gradientFactor = (float)y / WINDOW_HEIGHT;
-                Uint8 r = 5 + (int)(15 * gradientFactor);
-                Uint8 g = 5 + (int)(10 * gradientFactor);
-                Uint8 b = 40 + (int)(20 * gradientFactor);
+            // Random star colors - mostly white, but some colored stars
+            Uint8 r = brightness;
+            Uint8 g = brightness;
+            Uint8 b = brightness;
 
-                SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-                SDL_RenderDrawLine(renderer, 0, y, WINDOW_WIDTH, y);
+            // Add some color variation to stars
+            int color_type = rand() % 20;
+            if (color_type == 0)
+            { // Reddish
+                g = g * 0.7;
+                b = b * 0.7;
+            }
+            else if (color_type == 1)
+            { // Bluish
+                r = r * 0.7;
+                g = g * 0.8;
+            }
+            else if (color_type == 2)
+            { // Yellowish
+                b = b * 0.7;
             }
 
-            // Draw some stars with varying brightness
-            srand(time(NULL));
-            for (int i = 0; i < 200; i++)
+            SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+            SDL_Rect star = {x, y, size, size};
+            SDL_RenderFillRect(renderer, &star);
+
+            // Add occasional twinkle effect (brighter center)
+            if (rand() % 10 == 0)
             {
-                int x = rand() % WINDOW_WIDTH;
-                int y = rand() % WINDOW_HEIGHT;
-                int brightness = 150 + rand() % 106;  // 150-255
-                int size = (rand() % 10 > 8) ? 2 : 1; // Occasional larger stars
-
-                SDL_SetRenderDrawColor(renderer, brightness, brightness, brightness, 255);
-                SDL_Rect star = {x, y, size, size};
-                SDL_RenderFillRect(renderer, &star);
-
-                // Add occasional twinkle effect (brighter center)
-                if (rand() % 10 == 0)
-                {
-                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
-                    SDL_Rect twinkle = {x, y, 1, 1};
-                    SDL_RenderFillRect(renderer, &twinkle);
-                }
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+                SDL_Rect twinkle = {x, y, 1, 1};
+                SDL_RenderFillRect(renderer, &twinkle);
             }
-
-            // Draw a few clouds
-            for (int i = 0; i < 3; i++)
-            {
-                int cloudX = rand() % WINDOW_WIDTH;
-                int cloudY = 50 + rand() % 150;
-                int cloudSize = 30 + rand() % 60;
-
-                for (int j = 0; j < 8; j++)
-                {
-                    int offsetX = (rand() % (cloudSize / 2)) - cloudSize / 4;
-                    int offsetY = (rand() % (cloudSize / 3)) - cloudSize / 6;
-                    int circleSize = cloudSize / 4 + rand() % (cloudSize / 3);
-
-                    filledCircleRGBA(renderer,
-                                     cloudX + offsetX,
-                                     cloudY + offsetY,
-                                     circleSize,
-                                     30, 30, 50, 100);
-                }
-            }
-
-            // Reset render target
-            SDL_SetRenderTarget(renderer, NULL);
         }
+
+        // Reset render target
+        SDL_SetRenderTarget(renderer, NULL);
     }
 
     // Initialize mutex
