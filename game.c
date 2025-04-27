@@ -612,8 +612,8 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
             SDL_SetRenderDrawColor(renderer, 200, 120, 0, 255);
             for (int i = 0; i < 20; i++)
             {
-                float angle = 2.0f * 3.14f * i / 20.0f + rotation;
-                float radius = orangeRadius - 5 - (rand() % 5);
+                // float angle = 2.0f * 3.14f * i / 20.0f + rotation;
+                // float radius = orangeRadius - 5 - (rand() % 5);
                 float cx = x;
                 float cy = y;
                 filledCircleRGBA(renderer, cx, cy, 2, 220, 140, 0, 200);
