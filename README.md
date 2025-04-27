@@ -2,10 +2,8 @@
 
 ## Demo Video
 
-```bash
-# Progress Update
-April 18: https://www.youtube.com/watch?v=A7UfwjHtHrE
-```
+- April 18: https://www.youtube.com/watch?v=A7UfwjHtHrE
+- April 28: https://www.youtube.com/watch?v=HXFGfjR5fH0
 
 ## Setup
 
@@ -192,6 +190,6 @@ The game uses the following assets:
 - Enhance visual effects for slicing
 - Improve mouse spicing feature so user can slice in every angle
 
-### NinjaFruit Gameplay
+### NinjaFruit Gameplay Screenshot
 
-<img width="1141" alt="Screen Shot 2025-04-18 at 3 54 28 PM" src="https://github.com/user-attachments/assets/08122fe6-7e99-485d-8680-b682db3727fe" />
+<img width="1141" alt="NinjaFruit Gameplay" src="./assets/gameplay.png" />
