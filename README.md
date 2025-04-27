@@ -45,7 +45,7 @@ What sets NinjaFruit apart is its tight integration of Operating System concepts
 
 ### Core Gameplay Loop
 
-Fruits and bombs spawn from the top of the screen in random patterns. The player slices fruits with mouse movements to gain points while avoiding bombs that reduce health. Power-ups occasionally appear to provide special abilities. The challenge increases as the player progresses, with faster and more numerous objects appearing on screen.
+Fruits and bombs spawn from the top of the screen in random patterns. The player slices fruits with mouse movements to gain points while avoiding bombs that reduce health. The challenge increases as the player progresses, with faster and more numerous objects appearing on screen.
 
 ## 🎯 Gameplay Mechanics
 
@@ -58,7 +58,6 @@ Fruits and bombs spawn from the top of the screen in random patterns. The player
 
 - 🍎 **Fruit Slicing**: Drag the mouse across fruits to slice them and earn points
 - 💣 **Bomb Avoidance**: Avoid slicing bombs or lose health (no score penalty)
-- ⚡ **Power-ups**: Special items that provide temporary abilities (managed by a child process)
 - 🏆 **Score System**: Points increase with fruit slices
 
 ### Level Progression
@@ -98,7 +97,7 @@ void processSpawner()
     }
 ```
 
-- Fork() to create a child process for power-ups
+- Fork() to create a child process for background tasks
 - Wait() for child process termination
 
 ### 3. 📡 **Inter-Process Communication**
@@ -111,7 +110,7 @@ pid_t pid = fork();
 if (pid == 0) {
     // Child process
     close(pipefd[0]); // Close unused read end
-    write(pipefd[1], "powerup", 7);
+    write(pipefd[1], "message", 7);
     close(pipefd[1]);
     exit(0);
 } else {
@@ -185,7 +184,7 @@ The game uses the following assets:
 ## 🔮 Future Improvements
 
 - Add more varieties of fruits and obstacles
-- Implement additional power-up types
+- Implement interactive power-ups that can be sliced for special abilities
 - Add a combo system for slicing multiple fruits at once
 - Enhance visual effects for slicing
 - Improve mouse slicing feature so user can slice in every angle
