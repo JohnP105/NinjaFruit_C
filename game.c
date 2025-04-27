@@ -614,8 +614,8 @@ void drawFruit(ObjectType type, float x, float y, float rotation, int sliced)
             {
                 float angle = 2.0f * 3.14f * i / 20.0f + rotation;
                 float radius = orangeRadius - 5 - (rand() % 5);
-                float cx = x + halfSize / 2 + cos(angle) * radius;
-                float cy = y + halfSize / 2 + sin(angle) * radius;
+                float cx = x;
+                float cy = y;
                 filledCircleRGBA(renderer, cx, cy, 2, 220, 140, 0, 200);
             }
 
