@@ -2528,7 +2528,7 @@ void processSpawner()
 
     if (pid == 0)
     {
-        // Child process - will handle special power-ups
+        // Child process
         close(spawn_pipe[0]); // Close unused read end
 
         while (running)
